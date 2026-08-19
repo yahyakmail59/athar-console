@@ -1,0 +1,11 @@
+node_modules/
+.npm-cache/
+.wrangler/
+.dev.vars
+.dev.vars.adapter
+.env
+dist/
+coverage/
+.test-build/
+worker-configuration.d.ts
+*.log

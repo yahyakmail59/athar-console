@@ -1,0 +1,20 @@
+{
+  "name": "athar-console",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "predev": "wrangler d1 execute pharma-adapter-local --local --persist-to .wrangler/state --file ../pharma-gaza/worker/schema.sql --config ../pharma-gaza/worker/wrangler.local.jsonc --yes",
+    "dev": "wrangler dev --config wrangler.jsonc --config ../pharma-gaza/worker/wrangler.local.jsonc --env-file .dev.vars --env-file .dev.vars.adapter",
+    "types": "wrangler types --config wrangler.jsonc",
+    "check": "npm run types && tsc --noEmit",
+    "build:test": "npm run types && tsc --rootDir . --outDir .test-build --noEmit false",
+    "test": "npm run build:test && node --test tests/*.node.test.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply athar-console --local --config wrangler.jsonc",
+    "deploy:check": "wrangler deploy --dry-run --config wrangler.jsonc"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "wrangler": "4.124.0"
+  }
+}

@@ -1,0 +1,4 @@
+# انسخ هذا الملف إلى .dev.vars ولا ترفع الملف الحقيقي إلى GitHub.
+# استخدم أداة التوليد المذكورة في README لإنشاء القيم.
+ADMIN_PASSWORD_HASH=replace-with-salt:hash
+SESSION_SECRET=replace-with-a-long-random-secret

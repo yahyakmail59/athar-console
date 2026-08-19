@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "athar-console",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "athar-console",
+      "database_id": "298b29d2-9d08-4853-86d1-3ec0b16c1377",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "services": [
+    {
+      "binding": "PHARMA_ADAPTER",
+      "service": "pharma-sync-api"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

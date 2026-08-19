@@ -868,7 +868,7 @@ async function resetOwnerPin(request: Request, env: Env, tenantId: string, ipHas
     `INSERT INTO provisioning_jobs
      (id, tenant_id, action, status, idempotency_key, request_json, result_json, attempts,
       max_attempts, started_at, created_at, updated_at)
-     VALUES (?, ?, 'change_plan', 'running', ?, ?, '{}', 1, 3, ?, ?, ?)`,
+     VALUES (?, ?, 'reset_owner_pin', 'running', ?, ?, '{}', 1, 3, ?, ?, ?)`,
   ).bind(
     jobId, tenantId, jobId, safeJson({ action: 'reset_owner_pin', tenant_id: tenantId }),
     startedAt, startedAt, startedAt,

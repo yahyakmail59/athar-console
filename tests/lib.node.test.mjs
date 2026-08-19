@@ -67,3 +67,29 @@ test('DELETE adapter calls sign an empty body like GET does', async () => {
   const headers = await signedAdapterHeaders(secret, 'DELETE', path, requestId, '', timestamp);
   assert.equal(headers.get('X-Athar-Signature'), expected);
 });
+
+// كل إجراء يكتبه الكود في provisioning_jobs يجب أن يقبله قيد CHECK في المخطط.
+// أغفلت النسخة الأولى `restore` فصارت الاستعادة من الأرشيف تفشل بخطأ 500،
+// وهو خطأ لا تكشفه مراجعة الكود لأن الطرفين صحيحان كلٌّ على حدة.
+test('every provisioning action used in code is allowed by the schema CHECK', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const migrations = readdirSync('migrations').sort()
+    .map((file) => readFileSync(`migrations/${file}`, 'utf8')).join('\n');
+  const blocks = [...migrations.matchAll(/action\s+TEXT NOT NULL\s*\n?\s*CHECK \(action IN \(([^)]*)\)/g)];
+  assert.ok(blocks.length, 'no provisioning action CHECK found in migrations');
+  const allowed = new Set(
+    [...blocks.at(-1)[1].matchAll(/'([a-z_]+)'/g)].map((match) => match[1]),
+  );
+
+  const source = readFileSync('src/index.ts', 'utf8');
+  const used = new Set(
+    [...source.matchAll(/INSERT INTO provisioning_jobs[\s\S]{0,400}?VALUES \(\?, \?, '([a-z_]+)'/g)]
+      .map((match) => match[1]),
+  );
+  // الإجراءات التي تُمرَّر كمتغير `action` من مسار دورة الحياة.
+  for (const action of ['suspend', 'resume', 'archive', 'restore']) used.add(action);
+
+  for (const action of used) {
+    assert.ok(allowed.has(action), `provisioning action '${action}' is used but not allowed by the schema`);
+  }
+});

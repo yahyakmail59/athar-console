@@ -14,7 +14,8 @@ import {
 } from './lib';
 import {
   ProductAdapterError,
-  callPharmaAdapter,
+  callProductAdapter,
+  hasAdapter,
   type HealthResult,
   type LifecycleResult,
   type ProvisionResult,
@@ -347,7 +348,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const email = optionalText(body.email, 'البريد', 160).toLowerCase();
   const address = optionalText(body.address, 'العنوان', 300);
   const notes = optionalText(body.notes, 'الملاحظات', 1000);
-  const shouldProvision = productId === 'pharmacy';
+  const shouldProvision = hasAdapter(productId);
   const initialStatus = shouldProvision ? 'provisioning' : 'draft';
   const provisionPayload = {
     request_id: provisioningId,
@@ -404,7 +405,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   if (!shouldProvision) return jsonResponse({ ok: true, tenant_id: tenantId, status: 'draft' }, 201);
 
   try {
-    const result = await callPharmaAdapter<ProvisionResult>(env, {
+    const result = await callProductAdapter<ProvisionResult>(env, productId, {
       method: 'POST', path: '/internal/v1/tenants', requestId: provisioningId, body: provisionPayload,
     });
     const finishedAt = nowIso();
@@ -480,7 +481,7 @@ async function retryProvision(request: Request, env: Env, tenantId: string, ipHa
     max_attempts: number;
   }>();
   if (!row) throw new HttpError(404, 'PROVISION_JOB_NOT_FOUND', 'لا توجد عملية إنشاء لهذا العميل.');
-  if (row.product_id !== 'pharmacy') throw new HttpError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا المنتج غير مربوط بمحرك تلقائي بعد.');
+  if (!hasAdapter(row.product_id)) throw new HttpError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا المنتج غير مربوط بمحرك تلقائي بعد.');
   if (row.status !== 'failed' && row.status !== 'provisioning') {
     throw new HttpError(409, 'INVALID_TRANSITION', 'يمكن إعادة محاولة العمليات الفاشلة فقط.');
   }
@@ -507,7 +508,7 @@ async function retryProvision(request: Request, env: Env, tenantId: string, ipHa
   ]);
 
   try {
-    const result = await callPharmaAdapter<ProvisionResult>(env, {
+    const result = await callProductAdapter<ProvisionResult>(env, row.product_id, {
       method: 'POST', path: '/internal/v1/tenants', requestId: adapterRequestId, body: payload,
     });
     const finishedAt = nowIso();
@@ -626,7 +627,7 @@ async function lifecycle(request: Request, env: Env, tenantId: string, ipHash: s
   }
 
   const updatedAt = nowIso();
-  const adapterJobId = tenant.product_id === 'pharmacy' && String(tenant.external_tenant_id || '')
+  const adapterJobId = hasAdapter(String(tenant.product_id)) && String(tenant.external_tenant_id || '')
     ? crypto.randomUUID()
     : null;
   let adapterResult: LifecycleResult | null = null;
@@ -640,7 +641,7 @@ async function lifecycle(request: Request, env: Env, tenantId: string, ipHash: s
        VALUES (?, ?, ?, 'running', ?, ?, '{}', 1, 3, ?, ?, ?)`,
     ).bind(adapterJobId, tenantId, action, adapterJobId, safeJson(adapterBody), updatedAt, updatedAt, updatedAt).run();
     try {
-      adapterResult = await callPharmaAdapter<LifecycleResult>(env, {
+      adapterResult = await callProductAdapter<LifecycleResult>(env, String(tenant.product_id), {
         method: 'POST',
         path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/status`,
         requestId: adapterJobId,
@@ -815,7 +816,7 @@ async function tenantHealth(env: Env, tenantId: string): Promise<Response> {
     'SELECT id, product_id, external_tenant_id FROM tenants WHERE id = ?',
   ).bind(tenantId).first<{ id: string; product_id: string; external_tenant_id: string }>();
   if (!tenant) throw new HttpError(404, 'TENANT_NOT_FOUND', 'العميل غير موجود.');
-  if (tenant.product_id !== 'pharmacy' || !String(tenant.external_tenant_id || '')) {
+  if (!hasAdapter(tenant.product_id) || !String(tenant.external_tenant_id || '')) {
     throw new HttpError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا العميل غير مربوط بمحرك يدعم فحص الصحة.');
   }
 
@@ -823,7 +824,7 @@ async function tenantHealth(env: Env, tenantId: string): Promise<Response> {
   let status: 'healthy' | 'degraded' | 'unreachable';
   let detail: Record<string, unknown>;
   try {
-    const result = await callPharmaAdapter<HealthResult>(env, {
+    const result = await callProductAdapter<HealthResult>(env, tenant.product_id, {
       method: 'GET',
       path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/health`,
       requestId: crypto.randomUUID(),
@@ -855,7 +856,7 @@ async function resetOwnerPin(request: Request, env: Env, tenantId: string, ipHas
     public_url: string;
   }>();
   if (!tenant) throw new HttpError(404, 'TENANT_NOT_FOUND', 'العميل غير موجود.');
-  if (tenant.product_id !== 'pharmacy' || !String(tenant.external_tenant_id || '')) {
+  if (!hasAdapter(tenant.product_id) || !String(tenant.external_tenant_id || '')) {
     throw new HttpError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا العميل غير مربوط بمحرك يدعم إعادة تعيين الرقم.');
   }
   if (tenant.status === 'archived' || tenant.status === 'purging') {
@@ -875,7 +876,7 @@ async function resetOwnerPin(request: Request, env: Env, tenantId: string, ipHas
   ).run();
 
   try {
-    const result = await callPharmaAdapter<ProvisionResult>(env, {
+    const result = await callProductAdapter<ProvisionResult>(env, tenant.product_id, {
       method: 'POST',
       path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/reset-owner-pin`,
       requestId: jobId,
@@ -1015,9 +1016,9 @@ async function purgeTenant(request: Request, env: Env, tenantId: string, ipHash:
   ]);
 
   // حذف بيانات المنتج أولًا. لو فشل المحرك يبقى السجل في `purging` ولا تُفقد اللقطة.
-  if (tenant.product_id === 'pharmacy' && String(tenant.external_tenant_id || '')) {
+  if (hasAdapter(tenant.product_id) && String(tenant.external_tenant_id || '')) {
     try {
-      await callPharmaAdapter<LifecycleResult>(env, {
+      await callProductAdapter<LifecycleResult>(env, tenant.product_id, {
         method: 'DELETE',
         path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}`,
         requestId: crypto.randomUUID(),

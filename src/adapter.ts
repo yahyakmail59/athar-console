@@ -96,6 +96,79 @@ export async function signedAdapterHeaders(
   });
 }
 
+/**
+ * المنتجات التي لها محرك مربوط. إضافة منتج جديد تعني سطرًا هنا فقط،
+ * لا شرطًا جديدًا منثورًا في المسارات.
+ */
+const PRODUCT_ADAPTERS: Record<string, { binding: keyof Env; urlVar: keyof Env; label: string }> = {
+  pharmacy: { binding: 'PHARMA_ADAPTER', urlVar: 'PHARMA_ADAPTER_URL', label: 'الصيدليات' },
+  school: { binding: 'SCHOOL_ADAPTER', urlVar: 'SCHOOL_ADAPTER_URL', label: 'المدارس' },
+};
+
+export const hasAdapter = (productId: string): boolean =>
+  Object.hasOwn(PRODUCT_ADAPTERS, productId);
+
+export async function callProductAdapter<T>(
+  env: Env,
+  productId: string,
+  input: AdapterRequest,
+): Promise<T> {
+  const config = PRODUCT_ADAPTERS[productId];
+  if (!config) {
+    throw new ProductAdapterError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا المنتج غير مربوط بمحرك تلقائي بعد.');
+  }
+  const rawBody = input.body ? JSON.stringify(input.body) : '';
+  const headers = await signedAdapterHeaders(
+    env.ATHAR_ADAPTER_SECRET,
+    input.method,
+    input.path,
+    input.requestId,
+    rawBody,
+  );
+  const fallback = String(env[config.urlVar] || '').trim();
+  const service = env[config.binding] as Fetcher | undefined;
+  if (!fallback && !service) {
+    throw new ProductAdapterError(503, 'ADAPTER_UNREACHABLE', `محرك ${config.label} غير مربوط بعد.`);
+  }
+  const url = fallback
+    ? new URL(input.path, fallback).toString()
+    : `https://${productId}-adapter.internal${input.path}`;
+  const init: RequestInit = {
+    method: input.method,
+    headers,
+    body: input.body ? rawBody : undefined,
+    signal: AbortSignal.timeout(15_000),
+  };
+  let response: Response;
+  try {
+    response = fallback ? await fetch(url, init) : await service!.fetch(url, init);
+  } catch {
+    throw new ProductAdapterError(503, 'ADAPTER_UNREACHABLE', `تعذر الاتصال بمحرك ${config.label}.`);
+  }
+
+  const declaredLength = Number(response.headers.get('Content-Length') || 0);
+  if (declaredLength > MAX_ADAPTER_RESPONSE_BYTES) {
+    throw new ProductAdapterError(502, 'ADAPTER_BAD_RESPONSE', `أعاد محرك ${config.label} استجابة غير صالحة.`);
+  }
+  const raw = await response.text();
+  if (encoder.encode(raw).byteLength > MAX_ADAPTER_RESPONSE_BYTES) {
+    throw new ProductAdapterError(502, 'ADAPTER_BAD_RESPONSE', `أعاد محرك ${config.label} استجابة كبيرة جدًا.`);
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new ProductAdapterError(502, 'ADAPTER_BAD_RESPONSE', `تعذر قراءة استجابة محرك ${config.label}.`);
+  }
+  if (!response.ok || payload.ok !== true) {
+    const code = String(payload.error || 'ADAPTER_FAILED').slice(0, 80);
+    const message = String(payload.message || `فشل تنفيذ الطلب في محرك ${config.label}.`).slice(0, 240);
+    throw new ProductAdapterError(response.status, code, message);
+  }
+  return payload as T;
+}
+
 export async function callPharmaAdapter<T>(env: Env, input: AdapterRequest): Promise<T> {
   const rawBody = input.body ? JSON.stringify(input.body) : '';
   const headers = await signedAdapterHeaders(

@@ -22,6 +22,10 @@
     {
       "binding": "PHARMA_ADAPTER",
       "service": "pharma-sync-api"
+    },
+    {
+      "binding": "SCHOOL_ADAPTER",
+      "service": "athar-school-api"
     }
   ],
   "observability": {

@@ -165,6 +165,11 @@ function clientCard(tenant) {
     detail('مدفوع حتى', dateText(tenant.current_period_end)), detail('الرابط', tenant.public_url || 'بانتظار ربط المحرك'),
     detail('صحة المحرك', healthText(tenant)),
   ]);
+  // تاريخ انتهاء التجربة كان يُحفظ ولا يُعرض. إظهاره هنا يجعل الحقل مفيدًا
+  // للمشغّل: يعرف أي عرض قارب على الانتهاء دون فتح كل عميل.
+  if (tenant.environment === 'demo' && tenant.trial_expires_at) {
+    details.append(detail('تنتهي التجربة', trialText(tenant.trial_expires_at)));
+  }
   return element('article', { className: 'client-card' }, [header, badges, details, clientActions(tenant)]);
 }
 
@@ -173,6 +178,16 @@ const healthLabels = { healthy: 'سليم', degraded: 'متوقف داخل ال�
 function healthText(tenant) {
   const label = healthLabels[tenant.last_health_status] || 'لم يُفحص';
   return tenant.last_health_at ? `${label} · ${dateText(tenant.last_health_at)}` : label;
+}
+
+/** يوضّح قرب الانتهاء بالنص لا باللون وحده. */
+function trialText(value) {
+  const days = Math.ceil((new Date(`${String(value).slice(0, 10)}T00:00:00Z`) - Date.now()) / 86400000);
+  if (Number.isNaN(days)) return dateText(value);
+  if (days < 0) return `${dateText(value)} — انتهت`;
+  if (days === 0) return `${dateText(value)} — تنتهي اليوم`;
+  if (days <= 7) return `${dateText(value)} — بقي ${days} يومًا`;
+  return dateText(value);
 }
 
 function detail(label, value) {
@@ -308,11 +323,8 @@ function updateCreateOptions() {
   const previousPlan = planSelect.value;
   planSelect.replaceChildren(...plansFor(productId).map((plan) => element('option', { value: plan.id, text: `${plan.name_ar} — ${money(plan.default_price_minor, plan.currency)}` })));
   if ([...planSelect.options].some((option) => option.value === previousPlan)) planSelect.value = previousPlan;
-  const brandSelect = byId('create-brand');
-  const previousBrand = brandSelect.value;
-  brandSelect.replaceChildren(element('option', { value: '', text: 'بدون حزمة جاهزة' }));
-  for (const kit of state.dashboard.catalog.brandKits.filter((item) => item.product_id === productId)) brandSelect.append(element('option', { value: kit.id, text: kit.name }));
-  if ([...brandSelect.options].some((option) => option.value === previousBrand)) brandSelect.value = previousBrand;
+  // حزمة الهوية مخفية حتى محرك المطاعم: لا محرك يقرؤها اليوم، وحقلٌ بلا أثر
+  // يعلّم المشغّل ألا يثق بما تعرضه اللوحة. الكتالوج يبقى في القاعدة كما هو.
   const chosen = state.dashboard.catalog.plans.find((plan) => plan.id === planSelect.value);
   byId('create-form').elements.price.value = chosen ? Number(chosen.default_price_minor) / 100 : '';
 }

@@ -574,10 +574,12 @@ async function changePlan(request: Request, env: Env, tenantId: string, ipHash: 
   ).bind(tenantId).first<TenantRow>();
   if (!tenant) throw new HttpError(404, 'TENANT_NOT_FOUND', 'العميل غير موجود.');
   const plan = await env.DB.prepare(
-    `SELECT id, product_id, default_price_minor, currency, billing_cycle
+    `SELECT id, product_id, code, default_price_minor, currency, billing_cycle
      FROM plans WHERE id = ? AND product_id = ? AND is_active = 1`,
   ).bind(planId, tenant.product_id).first<CatalogPlan>();
   if (!plan) throw new HttpError(422, 'INVALID_PLAN', 'الباقة لا تتبع هذا المنتج أو أنها غير مفعلة.');
+  const tenantRow = await env.DB.prepare('SELECT external_tenant_id FROM tenants WHERE id = ?')
+    .bind(tenantId).first<{ external_tenant_id: string }>();
 
   const preservePrice = body.preserve_price === true;
   const priceMinor = preservePrice ? tenant.price_minor : Number(plan.default_price_minor);
@@ -596,7 +598,31 @@ async function changePlan(request: Request, env: Env, tenantId: string, ipHash: 
       ipHash,
     ),
   ]);
-  return jsonResponse({ ok: true });
+
+  // الباقة قرار تجاري يُفرض داخل المحرك. حفظها في اللوحة وحدها يترك العميل
+  // على صلاحياته القديمة: يدفع للكاملة ويرى الأساسية، أو العكس.
+  let engineSynced: boolean | undefined;
+  if (hasAdapter(tenant.product_id) && String(tenantRow?.external_tenant_id || '')) {
+    const planRequestId = crypto.randomUUID();
+    try {
+      await callProductAdapter(env, tenant.product_id, {
+        method: 'POST',
+        path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/plan`,
+        requestId: planRequestId,
+        body: { request_id: planRequestId, tenant_id: tenantId, plan_code: plan.code },
+      });
+      engineSynced = true;
+    } catch (error) {
+      engineSynced = false;
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'plan_sync_failed',
+        tenant_id: tenantId,
+        code: error instanceof ProductAdapterError ? error.code : 'UNKNOWN',
+      }));
+    }
+  }
+  return jsonResponse({ ok: true, engine_synced: engineSynced });
 }
 
 async function lifecycle(request: Request, env: Env, tenantId: string, ipHash: string): Promise<Response> {

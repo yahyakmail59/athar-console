@@ -11,7 +11,8 @@
     "build:test": "npm run types && tsc --rootDir . --outDir .test-build --noEmit false",
     "test": "npm run build:test && node --test tests/*.node.test.mjs",
     "db:migrate:local": "wrangler d1 migrations apply athar-console --local --config wrangler.jsonc",
-    "deploy:check": "wrangler deploy --dry-run --config wrangler.jsonc"
+    "deploy:check": "wrangler deploy --dry-run --config wrangler.jsonc",
+    "audit:linkage": "node tests/linkage.audit.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3",

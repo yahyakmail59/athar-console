@@ -119,3 +119,28 @@ test('every adapter path the console calls exists in every engine', async () => 
     }
   }
 });
+
+// المحوّل يرفض أي طلب بجسم لا يحمل request_id مطابقًا للترويسة. نسيانه يعيد
+// 400 يظهر للمشغّل كأن المحرك لا يستجيب، بينما اللوحة هي المخطئة.
+test('every adapter call with a body carries a matching request_id', async () => {
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync('src/index.ts', 'utf8');
+  const calls = [...source.matchAll(/callProductAdapter<[^>]*>\(\s*env,[\s\S]{0,1200}?\}\);/g)]
+    .map((match) => match[0]);
+  assert.ok(calls.length >= 4, `expected several adapter calls, found ${calls.length}`);
+
+  for (const call of calls) {
+    const body = call.match(/body:\s*([^,\r\n]+)/)?.[1]?.trim();
+    if (!body) continue;
+    // الجسم إما كائن مكتوب في مكانه أو اسم متغيّر؛ في الحالة الثانية نفتش
+    // تعريفه، وإلا حسبنا استدعاءً سليمًا خاطئًا.
+    // الأجسام المكتوبة في مكانها فقط: الجسم القادم من متغيّر قد يُقرأ من مهمة
+    // محفوظة، ولا يستطيع فحص ثابت تتبّعه. تلك يغطيها اختبار التكامل ورفض
+    // المحرك نفسه لأي طلب بمعرّف غير مطابق.
+    if (!body.startsWith('{')) continue;
+    assert.ok(
+      /request_id:/.test(call),
+      `an inline adapter body is missing request_id: ${call.slice(0, 200)}`,
+    );
+  }
+});

@@ -258,7 +258,7 @@ async function dashboard(env: Env): Promise<Response> {
     env.DB.prepare(
       `SELECT
          t.id, t.customer_id, t.product_id, t.external_tenant_id, t.slug, t.display_name,
-         t.environment, t.status, t.plan_id, t.public_url, t.admin_url, t.trial_expires_at,
+         t.environment, t.status, t.plan_id, t.public_url, t.admin_url, t.trial_expires_at, t.short_name,
          t.last_health_status, t.last_health_at, t.created_at, t.updated_at,
          c.contact_name, c.phone, c.email, c.notes,
          p.name_ar AS product_name,
@@ -781,7 +781,8 @@ async function paymentHistory(env: Env, tenantId: string): Promise<Response> {
 async function updateCustomer(request: Request, env: Env, tenantId: string, ipHash: string): Promise<Response> {
   const body = await readJson(request);
   const row = await env.DB.prepare(
-    `SELECT c.id, c.display_name, c.contact_name, c.phone, c.email, c.address, c.notes, c.status
+    `SELECT c.id, c.display_name, c.contact_name, c.phone, c.email, c.address, c.notes, c.status,
+            t.product_id, t.external_tenant_id, t.short_name
      FROM tenants t JOIN customers c ON c.id = t.customer_id WHERE t.id = ?`,
   ).bind(tenantId).first<Record<string, unknown>>();
   if (!row) throw new HttpError(404, 'TENANT_NOT_FOUND', 'العميل غير موجود.');
@@ -798,6 +799,9 @@ async function updateCustomer(request: Request, env: Env, tenantId: string, ipHa
     : optionalText(body.email, 'البريد', 160).toLowerCase();
   const address = body.address === undefined ? String(row.address) : optionalText(body.address, 'العنوان', 300);
   const notes = body.notes === undefined ? String(row.notes) : optionalText(body.notes, 'الملاحظات', 1000);
+  const shortName = body.short_name === undefined
+    ? String(row.short_name || '')
+    : optionalText(body.short_name, 'الاسم المختصر', 60);
   const status = body.status === undefined ? String(row.status) : String(body.status);
   if (!['lead', 'customer', 'inactive'].includes(status)) {
     throw new HttpError(422, 'INVALID_STATUS', 'حالة العميل غير صالحة.');
@@ -811,11 +815,42 @@ async function updateCustomer(request: Request, env: Env, tenantId: string, ipHa
        address = ?, notes = ?, status = ?, updated_at = ? WHERE id = ?`,
     ).bind(displayName, contactName, phone, email, address, notes, status, updatedAt, String(row.id)),
     // اسم المساحة يتبع اسم العميل في اللوحة حتى تبقى القوائم متسقة.
-    env.DB.prepare('UPDATE tenants SET display_name = ?, updated_at = ? WHERE id = ?')
-      .bind(displayName, updatedAt, tenantId),
+    env.DB.prepare('UPDATE tenants SET display_name = ?, short_name = ?, updated_at = ? WHERE id = ?')
+      .bind(displayName, shortName, updatedAt, tenantId),
     auditStatement(env, request, 'customer.update', 'customer', String(row.id), row, after, ipHash),
   ]);
-  return jsonResponse({ ok: true });
+
+  // الهوية تُدفع إلى المحرك: حفظها في اللوحة وحدها يترك العميل يرى اسمه القديم.
+  // فشل الدفع لا يُلغي الحفظ التجاري، لكن يجب أن يعرف المشغّل أنه لم يصل.
+  let engineSynced: boolean | undefined;
+  if (hasAdapter(String(row.product_id)) && String(row.external_tenant_id || '')) {
+    const profileRequestId = crypto.randomUUID();
+    try {
+      await callProductAdapter(env, String(row.product_id), {
+        method: 'POST',
+        path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/profile`,
+        requestId: profileRequestId,
+        // المحوّل يشترط تطابق معرّف الطلب بين الترويسة والجسم. إغفاله هنا
+        // كان يعيد 400 يظهر للمشغّل كأن المحرك لا يستجيب.
+        body: {
+          request_id: profileRequestId,
+          tenant_id: tenantId,
+          display_name: displayName,
+          short_name: shortName || displayName,
+        },
+      });
+      engineSynced = true;
+    } catch (error) {
+      engineSynced = false;
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'profile_sync_failed',
+        tenant_id: tenantId,
+        code: error instanceof ProductAdapterError ? error.code : 'UNKNOWN',
+      }));
+    }
+  }
+  return jsonResponse({ ok: true, engine_synced: engineSynced });
 }
 
 async function tenantHealth(env: Env, tenantId: string): Promise<Response> {

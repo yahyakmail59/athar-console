@@ -554,6 +554,11 @@ function openCustomerDialog(tenant) {
   form.reset();
   form.elements.tenant_id.value = tenant.id;
   form.elements.display_name.value = tenant.display_name || '';
+  form.elements.short_name.value = tenant.short_name || '';
+  // الاسم المختصر يظهر للمنتجات التي تعرضه في واجهتها.
+  document.querySelectorAll('.short-name-only').forEach((field) => {
+    field.hidden = !PRODUCTS_WITH_USERNAME.has(tenant.product_id);
+  });
   form.elements.contact_name.value = tenant.contact_name || '';
   form.elements.phone.value = tenant.phone || '';
   form.elements.email.value = tenant.email || '';
@@ -574,9 +579,13 @@ async function submitCustomer(event) {
   submit.disabled = true;
   byId('customer-error').textContent = '';
   try {
-    await api(`/api/tenants/${encodeURIComponent(tenantId)}/customer`, { method: 'PATCH', body: JSON.stringify(data) });
+    const payload = await api(`/api/tenants/${encodeURIComponent(tenantId)}/customer`, { method: 'PATCH', body: JSON.stringify(data) });
     byId('customer-dialog').close();
-    showToast('تم تحديث بيانات العميل.');
+    if (payload.engine_synced === false) {
+      showToast('حُفظت البيانات، لكن لم تصل إلى المحرك. افحص الصحة ثم أعد الحفظ.', true);
+    } else {
+      showToast('تم تحديث بيانات العميل.');
+    }
     await loadDashboard(true);
   } catch (error) { byId('customer-error').textContent = error.message; }
   finally { submit.disabled = false; }

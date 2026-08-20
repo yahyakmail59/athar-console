@@ -134,8 +134,8 @@
 
   <dialog id="create-dialog" class="modal">
     <form id="create-form" method="dialog">
-      <div class="modal-header"><div><p class="eyebrow">عميل جديد</p><h2>إنشاء مساحة عميل</h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="إغلاق">×</button></div>
-      <p class="modal-note">عند اختيار الصيدليات ستُنشأ الصيدلية تلقائيًا داخل محرك Pharma Gaza. المنتجات الأخرى تبقى مسودة حتى ربط محركاتها.</p>
+      <div class="modal-header"><div><p class="eyebrow">عميل جديد</p><h2>إنشاء مساحة عميل</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
+      <p class="modal-note">الصيدليات والمدارس تُنشأ تلقائيًا داخل محركاتها وتحصل على رابط فوري. المطاعم والعيادات تبقى مسودة حتى ربط محركاتها.</p>
       <div class="form-grid">
         <label class="field field-wide">اسم المشروع أو العميل<input name="display_name" required maxlength="160" placeholder="مثال: صيدلية الأمل"></label>
         <label class="field">المعرّف الإنجليزي<input name="slug" required maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="al-amal-pharmacy" dir="ltr"></label>
@@ -151,24 +151,25 @@
         <label class="field field-wide">ملاحظات<textarea name="notes" rows="3" maxlength="1000"></textarea></label>
       </div>
       <p id="create-error" class="form-error" role="alert"></p>
-      <div class="modal-actions"><button class="button button-quiet" value="cancel" formmethod="dialog">إلغاء</button><button class="button button-primary" type="submit">حفظ العميل</button></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button class="button button-primary" type="submit">حفظ العميل</button></div>
     </form>
   </dialog>
 
   <dialog id="credentials-dialog" class="modal modal-small">
-    <div class="modal-header"><div><p class="eyebrow">تم إنشاء الصيدلية</p><h2>بيانات الدخول الأولى</h2></div><button class="icon-button" data-close-dialog aria-label="إغلاق">×</button></div>
-    <p class="modal-note">اعرض هذه البيانات للعميل الآن. الرقم السري لا يُحفظ داخل لوحة أثر.</p>
+    <div class="modal-header"><div><p class="eyebrow">تم إنشاء المساحة</p><h2>بيانات الدخول</h2></div><button class="icon-button" data-close-dialog aria-label="إغلاق">×</button></div>
+    <p class="modal-note">اعرض هذه البيانات للعميل الآن. لا تُحفظ نسخة منها داخل لوحة أثر، ولن تظهر مرة أخرى.</p>
     <div class="details-grid">
-      <div class="detail"><span>رمز الصيدلية</span><strong id="credential-pharmacy" dir="ltr"></strong></div>
-      <div class="detail"><span>الرقم السري للمالك</span><strong id="credential-pin" dir="ltr"></strong></div>
+      <div class="detail"><span>رمز الدخول</span><strong id="credential-pharmacy" dir="ltr"></strong></div>
+      <div class="detail" id="credential-user-row" hidden><span>اسم المستخدم</span><strong id="credential-user" dir="ltr"></strong></div>
+      <div class="detail"><span id="credential-secret-label">الرقم السري</span><strong id="credential-pin" dir="ltr"></strong></div>
     </div>
-    <p><a id="credential-link" class="button button-secondary" target="_blank" rel="noopener">فتح الصيدلية</a></p>
+    <p><a id="credential-link" class="button button-secondary" target="_blank" rel="noopener">فتح المساحة</a></p>
     <div class="modal-actions"><button class="button button-primary" data-close-dialog type="button">تم حفظ البيانات</button></div>
   </dialog>
 
   <dialog id="payment-dialog" class="modal modal-small">
     <form id="payment-form" method="dialog">
-      <div class="modal-header"><div><p class="eyebrow">دفعة جديدة</p><h2 id="payment-title">تسجيل دفعة</h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="إغلاق">×</button></div>
+      <div class="modal-header"><div><p class="eyebrow">دفعة جديدة</p><h2 id="payment-title">تسجيل دفعة</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
       <input type="hidden" name="tenant_id">
       <div class="form-grid">
         <label class="field">المبلغ<input name="amount" type="number" min="0.01" step="0.01" required></label>
@@ -179,23 +180,23 @@
         <label class="field field-wide">ملاحظات<textarea name="notes" rows="2" maxlength="500"></textarea></label>
       </div>
       <p id="payment-error" class="form-error" role="alert"></p>
-      <div class="modal-actions"><button class="button button-quiet" value="cancel" formmethod="dialog">إلغاء</button><button class="button button-primary" type="submit">تسجيل الدفعة</button></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button class="button button-primary" type="submit">تسجيل الدفعة</button></div>
     </form>
   </dialog>
 
   <dialog id="plan-dialog" class="modal modal-small">
     <form id="plan-form" method="dialog">
-      <div class="modal-header"><div><p class="eyebrow">تعديل الاشتراك</p><h2 id="plan-title">تغيير الباقة</h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="إغلاق">×</button></div>
+      <div class="modal-header"><div><p class="eyebrow">تعديل الاشتراك</p><h2 id="plan-title">تغيير الباقة</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
       <input type="hidden" name="tenant_id"><label class="field">الباقة الجديدة<select name="plan_id" required></select></label>
       <label class="check-field"><input name="preserve_price" type="checkbox"> الإبقاء على سعر العميل الحالي</label>
       <p id="plan-error" class="form-error" role="alert"></p>
-      <div class="modal-actions"><button class="button button-quiet" value="cancel" formmethod="dialog">إلغاء</button><button class="button button-primary" type="submit">حفظ التغيير</button></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button class="button button-primary" type="submit">حفظ التغيير</button></div>
     </form>
   </dialog>
 
   <dialog id="customer-dialog" class="modal">
     <form id="customer-form" method="dialog">
-      <div class="modal-header"><div><p class="eyebrow">بيانات العميل</p><h2 id="customer-title">تعديل البيانات</h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="إغلاق">×</button></div>
+      <div class="modal-header"><div><p class="eyebrow">بيانات العميل</p><h2 id="customer-title">تعديل البيانات</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
       <input type="hidden" name="tenant_id">
       <div class="form-grid">
         <label class="field field-wide">اسم المشروع أو العميل<input name="display_name" required maxlength="160"></label>
@@ -207,13 +208,13 @@
         <label class="field field-wide">ملاحظات<textarea name="notes" rows="3" maxlength="1000"></textarea></label>
       </div>
       <p id="customer-error" class="form-error" role="alert"></p>
-      <div class="modal-actions"><button class="button button-quiet" value="cancel" formmethod="dialog">إلغاء</button><button class="button button-primary" type="submit">حفظ التعديلات</button></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button class="button button-primary" type="submit">حفظ التعديلات</button></div>
     </form>
   </dialog>
 
   <dialog id="purge-dialog" class="modal modal-small">
     <form id="purge-form" method="dialog">
-      <div class="modal-header"><div><p class="eyebrow">إجراء لا يمكن التراجع عنه</p><h2 id="purge-title">حذف نهائي</h2></div><button class="icon-button" value="cancel" formmethod="dialog" aria-label="إغلاق">×</button></div>
+      <div class="modal-header"><div><p class="eyebrow">إجراء لا يمكن التراجع عنه</p><h2 id="purge-title">حذف نهائي</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
       <p class="modal-note">سيُحذف سجل العميل واشتراكه ودفعاته من لوحة أثر، وبيانات مساحته داخل محرك المنتج. يبقى في سجل العمليات أثر مختصر فقط.</p>
       <input type="hidden" name="tenant_id">
       <ol class="purge-steps">
@@ -230,7 +231,7 @@
         </li>
       </ol>
       <p id="purge-error" class="form-error" role="alert"></p>
-      <div class="modal-actions"><button class="button button-quiet" value="cancel" formmethod="dialog">إلغاء</button><button id="purge-submit" class="button button-danger" type="submit" disabled>حذف نهائي</button></div>
+      <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button id="purge-submit" class="button button-danger" type="submit" disabled>حذف نهائي</button></div>
     </form>
   </dialog>
 

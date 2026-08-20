@@ -141,7 +141,7 @@ function clientActions(tenant) {
   actions.append(button('السجل المالي', 'button-quiet', 'history', tenant.id));
   if (tenant.external_tenant_id) {
     actions.append(button('فحص الصحة', 'button-quiet', 'health', tenant.id));
-    actions.append(button('رقم سري جديد', 'button-quiet', 'reset-pin', tenant.id));
+    actions.append(button('بيانات دخول جديدة', 'button-quiet', 'reset-pin', tenant.id));
   }
   if (tenant.status === 'active') actions.append(button('إيقاف', 'button-danger', 'suspend', tenant.id));
   if (tenant.status === 'suspended') actions.append(button('استئناف', 'button-secondary', 'resume', tenant.id));
@@ -363,9 +363,21 @@ function updateDemoVisibility() {
   document.querySelectorAll('.demo-only').forEach((field) => field.hidden = !demo);
 }
 
+/**
+ * بيانات الدخول تصل بشكل موحّد من كل محرك. القراءة تتحمّل المفاتيح القديمة
+ * أيضًا، فلا تنكسر الشاشة أمام العميل لو تأخّر نشر محرك عن اللوحة.
+ */
 function showProvisionedCredentials(payload) {
-  byId('credential-pharmacy').textContent = payload.credentials.pharmacy_id;
-  byId('credential-pin').textContent = payload.credentials.owner_pin;
+  const c = payload.credentials || {};
+  const loginId = c.login_id || c.pharmacy_id || c.school_id || '—';
+  const secret = c.secret || c.owner_pin || c.admin_password || '—';
+  byId('credential-pharmacy').textContent = loginId;
+  byId('credential-pin').textContent = secret;
+  byId('credential-secret-label').textContent = c.secret_label || 'الرقم السري';
+  const userRow = byId('credential-user-row');
+  const username = c.username || c.admin_username || '';
+  byId('credential-user').textContent = username;
+  userRow.hidden = !username || username === 'owner';
   const link = byId('credential-link');
   link.href = payload.public_url || '#';
   link.hidden = !payload.public_url;

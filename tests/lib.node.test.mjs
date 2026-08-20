@@ -93,3 +93,29 @@ test('every provisioning action used in code is allowed by the schema CHECK', as
     assert.ok(allowed.has(action), `provisioning action '${action}' is used but not allowed by the schema`);
   }
 });
+
+// كل مسار محوّل تناديه اللوحة يجب أن يوجد في كل محرك مربوط.
+// المدرسة كانت تسمّيه reset-admin-password واللوحة تنادي reset-owner-pin،
+// فكان الزر يعيد "Adapter route not found" لعملاء المدارس وحدهم.
+test('every adapter path the console calls exists in every engine', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const source = readFileSync('src/index.ts', 'utf8');
+  const paths = [...source.matchAll(/path: `\/internal\/v1\/tenants\/\$\{[^}]+\}\/([a-z-]+)`/g)]
+    .map((match) => match[1]);
+  assert.ok(paths.length >= 3, 'no adapter paths found in the console source');
+
+  const engines = {
+    pharmacy: '../pharma-gaza/worker/worker.js',
+    school: '../rowad-gaza-school/worker/worker.js',
+  };
+  for (const [product, file] of Object.entries(engines)) {
+    if (!existsSync(file)) continue;
+    const engine = readFileSync(file, 'utf8');
+    for (const path of paths) {
+      assert.ok(
+        engine.includes(path),
+        `the console calls '${path}' but the ${product} engine does not route it`,
+      );
+    }
+  }
+});

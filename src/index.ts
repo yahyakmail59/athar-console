@@ -878,7 +878,7 @@ async function resetOwnerPin(request: Request, env: Env, tenantId: string, ipHas
   try {
     const result = await callProductAdapter<ProvisionResult>(env, tenant.product_id, {
       method: 'POST',
-      path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/reset-owner-pin`,
+      path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/reset-owner-credential`,
       requestId: jobId,
       body: { request_id: jobId, tenant_id: tenantId },
     });

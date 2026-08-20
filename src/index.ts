@@ -348,6 +348,11 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const email = optionalText(body.email, 'البريد', 160).toLowerCase();
   const address = optionalText(body.address, 'العنوان', 300);
   const notes = optionalText(body.notes, 'الملاحظات', 1000);
+  const adminUsername = optionalText(body.admin_username, 'اسم مستخدم المدير', 40).toLowerCase();
+  if (adminUsername && !/^[a-z0-9._-]{3,40}$/.test(adminUsername)) {
+    throw new HttpError(422, 'INVALID_ADMIN_USERNAME',
+      'اسم المستخدم: حروف إنجليزية صغيرة وأرقام ونقطة وشرطة، من 3 إلى 40.');
+  }
   const shouldProvision = hasAdapter(productId);
   const initialStatus = shouldProvision ? 'provisioning' : 'draft';
   const provisionPayload = {
@@ -359,6 +364,8 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     plan_code: plan.code,
     brand_kit_code: brandKitId || '',
     trial_expires_at: trialExpiresAt,
+    // اسم مستخدم المدير اختياري: المحرك يضع افتراضه حين يُترك فارغًا.
+    admin_username: adminUsername,
     config: { phone, address, currency: 'ILS' },
   };
   const tenantAfter = { tenantId, displayName, slug, productId, planId, environment, status: initialStatus };

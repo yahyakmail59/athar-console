@@ -105,6 +105,8 @@ const actionLabels = {
   'tenant.provision_retried': 'إعادة إنشاء ناجحة', 'tenant.provision_retry_failed': 'فشل إعادة الإنشاء',
 };
 
+const PRODUCTS_WITH_USERNAME = new Set(['school']);
+
 const productIcons = { restaurant: '◉', school: '▤', pharmacy: '✚', clinic: '◇' };
 
 function badge(value) {
@@ -325,6 +327,11 @@ function updateCreateOptions() {
   if ([...planSelect.options].some((option) => option.value === previousPlan)) planSelect.value = previousPlan;
   // حزمة الهوية مخفية حتى محرك المطاعم: لا محرك يقرؤها اليوم، وحقلٌ بلا أثر
   // يعلّم المشغّل ألا يثق بما تعرضه اللوحة. الكتالوج يبقى في القاعدة كما هو.
+  // اسم مستخدم المدير يظهر للمنتجات التي تستخدم أسماء مستخدمين. الصيدلية
+  // تدخل برمزها ورقم سري بلا اسم، فإظهاره لها حقل بلا أثر.
+  document.querySelectorAll('.username-only').forEach((field) => {
+    field.hidden = !PRODUCTS_WITH_USERNAME.has(productId);
+  });
   const chosen = state.dashboard.catalog.plans.find((plan) => plan.id === planSelect.value);
   byId('create-form').elements.price.value = chosen ? Number(chosen.default_price_minor) / 100 : '';
 }
@@ -404,6 +411,7 @@ async function submitCreate(event) {
   data.price_minor = Math.round(Number(data.price || 0) * 100);
   delete data.price;
   if (data.environment !== 'demo') delete data.trial_expires_at;
+  if (!String(data.admin_username || '').trim()) delete data.admin_username;
   submit.disabled = true;
   byId('create-error').textContent = '';
   try {

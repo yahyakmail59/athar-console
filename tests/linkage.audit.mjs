@@ -114,6 +114,7 @@ async function pharmacyUpdates(token) {
 /* ==================== التدقيق ==================== */
 
 const created = [];
+const AUDIT_SCHOOL_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 async function cleanup() {
   for (const tenant of created) {
@@ -147,7 +148,7 @@ try {
       display_name: 'مدرسة التدقيق', slug: schoolSlug, product_id: 'school',
       environment: 'demo', admin_username: 'audit.admin',
       plan_id: catalog.plans.find((p) => p.id === 'school:basic').id,
-      phone: '0599000000',
+      phone: '0599000000', school_logo_data_url: AUDIT_SCHOOL_LOGO,
     }),
   });
   const schoolTenant = { id: schoolCreate.payload?.tenant_id, slug: schoolSlug };
@@ -165,6 +166,10 @@ try {
   check('مدرسة/دخول', 'بيانات اللوحة تفتح المدرسة', Boolean(schoolToken));
 
   const demo = await schoolStores(schoolToken);
+  const createdProfile = await schoolProfile(schoolToken);
+  check('school/identity', 'school name and logo reach the engine from the console',
+    createdProfile?.name === 'مدرسة التدقيق' && createdProfile?.logoDataUrl === AUDIT_SCHOOL_LOGO,
+    `${createdProfile?.name} / logo=${Boolean(createdProfile?.logoDataUrl)}`);
   check('مدرسة/بيانات العرض', 'النسخة التجريبية تصل ببيانات كافية',
     (demo.stores.students?.length || 0) >= 20 && (demo.stores.attendanceRecords?.length || 0) > 100,
     `طلاب=${demo.stores.students?.length || 0} حضور=${demo.stores.attendanceRecords?.length || 0}`);

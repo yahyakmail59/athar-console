@@ -215,3 +215,9 @@ tr:last-child td { border-bottom: 0; }
 .purge-steps p { margin: 0; font-size: .82rem; }
 .purge-steps input { width: 100%; }
 .purge-steps code { background: rgba(0, 0, 0, .06); border-radius: 5px; padding: 1px 6px; font-weight: 600; }
+
+.optional-label { color: var(--muted); font-size: .8em; font-weight: 500; }
+.school-logo-field { display: grid; gap: 8px; }
+.school-logo-field input[type="file"] { padding: 10px; border: 1px dashed var(--line-strong); border-radius: 12px; background: rgba(248, 250, 252, .82); }
+.school-logo-field small { color: var(--muted); line-height: 1.65; }
+.school-logo-upload-preview { width: 76px; height: 76px; object-fit: contain; padding: 7px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 18px rgba(15, 23, 42, .08); }

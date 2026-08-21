@@ -349,6 +349,12 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const address = optionalText(body.address, 'العنوان', 300);
   const notes = optionalText(body.notes, 'الملاحظات', 1000);
   const adminUsername = optionalText(body.admin_username, 'اسم مستخدم المدير', 40).toLowerCase();
+  const schoolLogoDataUrl = productId === 'school'
+    ? optionalText(body.school_logo_data_url, 'شعار المدرسة', 42000)
+    : '';
+  if (schoolLogoDataUrl && !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(schoolLogoDataUrl)) {
+    throw new HttpError(422, 'INVALID_SCHOOL_LOGO', 'بيانات شعار المدرسة غير صالحة.');
+  }
   if (adminUsername && !/^[a-z0-9._-]{3,40}$/.test(adminUsername)) {
     throw new HttpError(422, 'INVALID_ADMIN_USERNAME',
       'اسم المستخدم: حروف إنجليزية صغيرة وأرقام ونقطة وشرطة، من 3 إلى 40.');
@@ -366,7 +372,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     trial_expires_at: trialExpiresAt,
     // اسم مستخدم المدير اختياري: المحرك يضع افتراضه حين يُترك فارغًا.
     admin_username: adminUsername,
-    config: { phone, address, currency: 'ILS' },
+    config: { phone, address, currency: 'ILS', logo_data_url: schoolLogoDataUrl },
   };
   const tenantAfter = { tenantId, displayName, slug, productId, planId, environment, status: initialStatus };
 

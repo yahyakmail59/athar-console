@@ -138,6 +138,7 @@
       <p class="modal-note">الصيدليات والمدارس تُنشأ تلقائيًا داخل محركاتها وتحصل على رابط فوري. المطاعم والعيادات تبقى مسودة حتى ربط محركاتها.</p>
       <div class="form-grid">
         <label class="field field-wide">اسم المشروع أو العميل<input name="display_name" required maxlength="160" placeholder="مثال: صيدلية الأمل"></label>
+        <label class="field field-wide school-logo-field" id="school-logo-field" hidden>شعار المدرسة <span class="optional-label">اختياري</span><input id="create-school-logo" name="school_logo" type="file" accept="image/jpeg,image/png,image/webp"><small>يُحفظ مع المدرسة ويظهر في شاشة الدخول والواجهة. JPG أو PNG أو WebP، بحد أقصى 3 ميجابايت.</small><img id="create-school-logo-preview" class="school-logo-upload-preview" alt="معاينة شعار المدرسة" hidden></label>
         <label class="field">المعرّف الإنجليزي<input name="slug" required maxlength="63" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="al-amal-pharmacy" dir="ltr"></label>
         <label class="field">نوع النسخة<select name="environment" required><option value="demo">تجريبية</option><option value="production">حقيقية</option></select></label>
         <label class="field">المنتج<select id="create-product" name="product_id" required></select></label>

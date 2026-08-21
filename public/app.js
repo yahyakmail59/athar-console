@@ -106,6 +106,7 @@ const actionLabels = {
 };
 
 const PRODUCTS_WITH_USERNAME = new Set(['school']);
+let createSchoolLogoDataUrl = '';
 
 const productIcons = { restaurant: '◉', school: '▤', pharmacy: '✚', clinic: '◇' };
 
@@ -332,6 +333,7 @@ function updateCreateOptions() {
   document.querySelectorAll('.username-only').forEach((field) => {
     field.hidden = !PRODUCTS_WITH_USERNAME.has(productId);
   });
+  byId('school-logo-field').hidden = productId !== 'school';
   const chosen = state.dashboard.catalog.plans.find((plan) => plan.id === planSelect.value);
   byId('create-form').elements.price.value = chosen ? Number(chosen.default_price_minor) / 100 : '';
 }
@@ -370,11 +372,44 @@ function setView(view) {
 function openCreateDialog() {
   const form = byId('create-form');
   form.reset();
+  createSchoolLogoDataUrl = '';
+  byId('create-school-logo-preview').hidden = true;
+  byId('create-school-logo-preview').removeAttribute('src');
   byId('create-error').textContent = '';
   fillCatalogControls();
   form.elements.trial_expires_at.value = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
   updateDemoVisibility();
   byId('create-dialog').showModal();
+}
+
+function prepareSchoolLogo(file) {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowedTypes.includes(file?.type)) return Promise.reject(new Error('اختر صورة بصيغة JPG أو PNG أو WebP.'));
+  if (file.size > 3 * 1024 * 1024) return Promise.reject(new Error('حجم شعار المدرسة يجب ألا يتجاوز 3 ميجابايت.'));
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('تعذر قراءة ملف الشعار.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('ملف الشعار غير صالح.'));
+      image.onload = () => {
+        const maxSide = 320;
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d');
+        if (!context) return reject(new Error('تعذر تجهيز صورة الشعار.'));
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        let result = canvas.toDataURL('image/webp', .82);
+        if (result.length > 42000) result = canvas.toDataURL('image/jpeg', .78);
+        if (result.length > 42000) return reject(new Error('الشعار كبير بعد الضغط. اختر صورة أبسط أو أصغر.'));
+        resolve(result);
+      };
+      image.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function updateDemoVisibility() {
@@ -410,6 +445,9 @@ async function submitCreate(event) {
   const data = Object.fromEntries(new FormData(form));
   data.price_minor = Math.round(Number(data.price || 0) * 100);
   delete data.price;
+  delete data.school_logo;
+  if (data.product_id === 'school' && createSchoolLogoDataUrl) data.school_logo_data_url = createSchoolLogoDataUrl;
+  else delete data.school_logo_data_url;
   if (data.environment !== 'demo') delete data.trial_expires_at;
   if (!String(data.admin_username || '').trim()) delete data.admin_username;
   submit.disabled = true;
@@ -790,6 +828,27 @@ function bindEvents() {
   byId('create-product').addEventListener('change', updateCreateOptions);
   byId('create-plan').addEventListener('change', updateCreateOptions);
   byId('create-form').elements.environment.addEventListener('change', updateDemoVisibility);
+  byId('create-school-logo').addEventListener('change', async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) {
+      createSchoolLogoDataUrl = '';
+      byId('create-school-logo-preview').hidden = true;
+      byId('create-school-logo-preview').removeAttribute('src');
+      return;
+    }
+    try {
+      createSchoolLogoDataUrl = await prepareSchoolLogo(file);
+      const preview = byId('create-school-logo-preview');
+      preview.src = createSchoolLogoDataUrl;
+      preview.hidden = false;
+    } catch (error) {
+      createSchoolLogoDataUrl = '';
+      event.currentTarget.value = '';
+      byId('create-school-logo-preview').hidden = true;
+      byId('create-school-logo-preview').removeAttribute('src');
+      showToast(error.message, true);
+    }
+  });
   byId('create-form').addEventListener('submit', submitCreate);
   byId('payment-form').addEventListener('submit', submitPayment);
   byId('plan-form').addEventListener('submit', submitPlan);

@@ -19,6 +19,8 @@ import { readFileSync } from 'node:fs';
 const CONSOLE = process.env.ATHAR_CONSOLE_URL || 'https://athar-console.yahyakmail59.workers.dev';
 const SCHOOL = process.env.ATHAR_SCHOOL_URL || 'https://athar-school-api.yahyakmail59.workers.dev';
 const PHARMA = process.env.ATHAR_PHARMA_URL || 'https://pharma-sync-api.yahyakmail59.workers.dev';
+const RESTAURANT = process.env.ATHAR_RESTAURANT_URL
+  || 'https://athar-restaurant-api.yahyakmail59.workers.dev';
 const SECRETS = process.env.ATHAR_SECRETS_FILE
   || 'C:/Users/yahya/Desktop/compony/secrets/athar-console-admin.txt';
 
@@ -37,6 +39,36 @@ async function console_(path, { method = 'GET', body } = {}) {
   const setCookie = response.headers.get('set-cookie');
   if (setCookie) cookie = setCookie.split(';')[0];
   return { status: response.status, payload: await response.json().catch(() => null) };
+}
+
+/* ==================== أدوات المطعم ==================== */
+
+async function restaurantLogin(credentials, device = 'linkage-audit') {
+  const response = await fetch(`${RESTAURANT}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      restaurant_id: credentials.login_id,
+      username: credentials.username,
+      password: credentials.secret,
+      device_id: device,
+    }),
+  });
+  return { status: response.status, payload: await response.json().catch(() => null) };
+}
+
+const restaurantApi = async (token, path, init = {}) => {
+  const response = await fetch(RESTAURANT + path, {
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) },
+  });
+  return { status: response.status, payload: await response.json().catch(() => null) };
+};
+
+/** الصفحة العامة نصًّا: الفحص الوحيد الذي يرى ما يراه زبون المطعم. */
+async function restaurantPage(slug, path = '') {
+  const response = await fetch(`${RESTAURANT}/r/${slug}/${path}`);
+  return { status: response.status, html: await response.text() };
 }
 
 const results = [];
@@ -318,6 +350,149 @@ try {
   const pharmaHealth = await console_(`/api/tenants/${pharmaTenant.id}/health`, { method: 'POST', body: '{}' });
   check('صيدلية/الصحة', 'فحص الصحة يعيد حالة المحرك',
     pharmaHealth.payload?.status === 'healthy', pharmaHealth.payload?.status);
+
+  /* ---------- المطعم ---------- */
+
+  const restoSlug = `audit-resto-${stamp}`;
+  const restoCreate = await console_('/api/tenants', {
+    method: 'POST',
+    body: JSON.stringify({
+      display_name: 'مطعم التدقيق', slug: restoSlug, product_id: 'restaurant',
+      environment: 'demo', admin_username: 'audit.owner',
+      plan_id: catalog.plans.find((p) => p.id === 'restaurant:full').id,
+      phone: '0599333444',
+    }),
+  });
+  const restoTenant = { id: restoCreate.payload?.tenant_id, slug: restoSlug };
+  if (restoTenant.id) created.push(restoTenant);
+
+  check('مطعم/إنشاء', 'اللوحة تنشئ مطعمًا وتعيد بيانات دخوله',
+    restoCreate.status === 201 && Boolean(restoCreate.payload.credentials?.secret),
+    restoCreate.payload?.external_tenant_id || restoCreate.payload?.error || '');
+
+  const restoCreds = restoCreate.payload.credentials;
+  const restoPublicSlug = restoCreate.payload.slug || restoSlug;
+
+  const restoSession = await restaurantLogin(restoCreds);
+  check('مطعم/دخول', 'بيانات اللوحة تفتح لوحة المطعم', restoSession.status === 200);
+  const restoToken = restoSession.payload?.token;
+
+  // الموقع العام هو المنتج هنا، بخلاف الصيدلية والمدرسة. لا يكفي أن يرد
+  // المحرك: يجب أن تصل الصفحة نفسها إلى زائر بلا حساب.
+  const home = await restaurantPage(restoPublicSlug);
+  check('مطعم/الموقع العام', 'رابط المطعم يفتح صفحة مبنيّة على الخادم',
+    home.status === 200 && home.html.includes('مطعم التدقيق'),
+    `${home.status} / ${home.html.length} حرفًا`);
+
+  const menuPage = await restaurantPage(restoPublicSlug, 'menu');
+  check('مطعم/بيانات العرض', 'النسخة التجريبية تصل بمنيو كامل',
+    menuPage.status === 200 && menuPage.html.includes('كباب أضنة')
+    && menuPage.html.includes('شاورما لحم'),
+    `${(menuPage.html.match(/data-add=/g) || []).length} صنفًا قابلًا للطلب`);
+
+  const restoDash = await restaurantApi(restoToken, '/api/dashboard');
+  check('مطعم/لوحة التشغيل', 'بذرة العرض تُظهر أرقامًا لا أصفارًا',
+    restoDash.status === 200 && Number(restoDash.payload?.week?.orders) > 0,
+    `طلبات الأسبوع=${restoDash.payload?.week?.orders} إيراد=${restoDash.payload?.week?.revenue}`);
+
+  // التسعير على الخادم: أهم فحص في هذا المنتج. نرسل سعرًا كاذبًا ونتأكد
+  // أن المحفوظ هو سعر قاعدة البيانات لا ما أرسله المتصفح.
+  const menuJson = await restaurantApi(restoToken, '/api/content/menu_items');
+  const pricedItem = menuJson.payload?.rows?.find((row) => Number(row.is_priced) && Number(row.price_minor) > 0);
+  const forgedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/api/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer_name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
+      lines: [{ item_id: pricedItem.id, quantity: 2, unit_price_minor: 1, total_minor: 1 }],
+    }),
+  });
+  const forged = await forgedOrder.json().catch(() => null);
+  const storedOrders = await restaurantApi(restoToken, '/api/orders?limit=5');
+  const placed = storedOrders.payload?.orders?.find((order) => order.code === forged?.code);
+  check('مطعم/التسعير', 'السعر يُحسب على الخادم ويتجاهل ما يرسله المتصفح',
+    forgedOrder.status === 201 && Number(placed?.total_minor) === Number(pricedItem.price_minor) * 2,
+    `المحفوظ=${placed?.total_minor} المتوقع=${Number(pricedItem.price_minor) * 2}`);
+
+  // الإيصال يثبت أن resvg والخطوط على R2 يعملان في الإنتاج لا محليًا فقط.
+  const receipt = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/${placed?.token}/receipt.png`);
+  const receiptBytes = new Uint8Array(await receipt.arrayBuffer());
+  check('مطعم/الإيصال', 'الإيصال يُرسم صورةً على الخادم بخطوط R2',
+    receipt.status === 200 && receiptBytes[0] === 0x89 && receiptBytes.length > 5000,
+    `${receipt.status} / ${receiptBytes.length} بايت`);
+
+  const restoRename = await console_(`/api/tenants/${restoTenant.id}/customer`, {
+    method: 'PATCH', body: JSON.stringify({ display_name: 'مطعم باسم جديد' }),
+  });
+  const renamedHome = await restaurantPage(restoPublicSlug);
+  check('مطعم/الهوية', 'تغيير الاسم من اللوحة يصل إلى الموقع العام',
+    restoRename.payload?.engine_synced === true && renamedHome.html.includes('مطعم باسم جديد'),
+    renamedHome.html.includes('مطعم باسم جديد') ? 'وصل' : 'لم يصل');
+
+  const stealName = await restaurantApi(restoToken, '/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name_ar: 'اسم سرقه المطعم', tagline_ar: 'شعار يملكه المطعم' }),
+  });
+  const afterSteal = await restaurantPage(restoPublicSlug);
+  check('مطعم/ملكية الهوية', 'المطعم لا يستطيع تغيير اسمه ويغيّر شعاره',
+    stealName.status === 200 && afterSteal.html.includes('مطعم باسم جديد')
+    && !afterSteal.html.includes('اسم سرقه المطعم') && afterSteal.html.includes('شعار يملكه المطعم'));
+
+  // النزول للباقة الأساسية يمنع حفظ الطلبات ويُبقي الموقع يعمل.
+  const downgrade = await console_(`/api/tenants/${restoTenant.id}/plan`, {
+    method: 'PATCH',
+    body: JSON.stringify({ plan_id: catalog.plans.find((p) => p.id === 'restaurant:menu').id }),
+  });
+  const blockedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/api/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer_name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
+      lines: [{ item_id: pricedItem.id, quantity: 1 }],
+    }),
+  });
+  const siteStillUp = await restaurantPage(restoPublicSlug);
+  check('مطعم/تغيير الباقة', 'النزول يمنع حفظ الطلبات ويُبقي الموقع يعمل',
+    downgrade.payload?.engine_synced === true && blockedOrder.status === 402
+    && siteStillUp.status === 200,
+    `لوحة=${downgrade.status}/${downgrade.payload?.engine_synced} طلب=${blockedOrder.status} موقع=${siteStillUp.status}`);
+
+  const upgrade = await console_(`/api/tenants/${restoTenant.id}/plan`, {
+    method: 'PATCH',
+    body: JSON.stringify({ plan_id: catalog.plans.find((p) => p.id === 'restaurant:full').id }),
+  });
+  const ordersAfterUpgrade = await restaurantApi(
+    (await restaurantLogin(restoCreds, 'audit-up')).payload?.token, '/api/orders?limit=50',
+  );
+  check('مطعم/الترقية', 'الترقية تعيد الميزة بلا فقد طلب واحد',
+    upgrade.payload?.engine_synced === true && (ordersAfterUpgrade.payload?.orders?.length || 0) > 10,
+    `لوحة=${upgrade.status}/${upgrade.payload?.engine_synced} طلبات=${ordersAfterUpgrade.payload?.orders?.length}`);
+
+  const restoCreds2 = (await console_(`/api/tenants/${restoTenant.id}/reset-pin`, { method: 'POST', body: '{}' }))
+    .payload?.credentials;
+  check('مطعم/بيانات جديدة', 'الإصدار الجديد يعمل والقديم يبطل',
+    (await restaurantLogin(restoCreds, 'audit-r3')).status === 401
+    && (await restaurantLogin(restoCreds2, 'audit-r4')).status === 200);
+
+  await console_(`/api/tenants/${restoTenant.id}/lifecycle`, {
+    method: 'POST', body: JSON.stringify({ action: 'suspend' }),
+  });
+  const suspendedSite = await restaurantPage(restoPublicSlug);
+  check('مطعم/الإيقاف', 'الإيقاف يغلق الموقع العام ويمنع الدخول',
+    suspendedSite.status === 404 && (await restaurantLogin(restoCreds2, 'audit-r5')).status === 403,
+    `موقع=${suspendedSite.status}`);
+
+  await console_(`/api/tenants/${restoTenant.id}/lifecycle`, {
+    method: 'POST', body: JSON.stringify({ action: 'resume' }),
+  });
+  check('مطعم/الاستئناف', 'الاستئناف يعيد الموقع والدخول',
+    (await restaurantPage(restoPublicSlug)).status === 200
+    && (await restaurantLogin(restoCreds2, 'audit-r6')).status === 200);
+
+  const restoHealth = await console_(`/api/tenants/${restoTenant.id}/health`, { method: 'POST', body: '{}' });
+  check('مطعم/الصحة', 'فحص الصحة يسأل المحرك ويعيد حالته',
+    restoHealth.payload?.status === 'healthy', restoHealth.payload?.status);
 
   /* ---------- الحذف النهائي ---------- */
 

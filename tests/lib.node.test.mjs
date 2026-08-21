@@ -104,13 +104,25 @@ test('every adapter path the console calls exists in every engine', async () => 
     .map((match) => match[1]);
   assert.ok(paths.length >= 3, 'no adapter paths found in the console source');
 
+  // قائمة المحركات تُشتق من `PRODUCT_ADAPTERS` لا تُكتب هنا. القائمة اليدوية
+  // كانت تصمت عن منتج جديد: يُربط بمحرك وينسى أحدهم إضافته هنا، فيمر الفحص
+  // وهو لا يفحص شيئًا.
+  const adapterSource = readFileSync('src/adapter.ts', 'utf8');
+  const wired = [...adapterSource.matchAll(/^ {2}([a-z_]+): \{ binding:/gm)].map((match) => match[1]);
+  assert.ok(wired.length >= 2, 'no wired products found in PRODUCT_ADAPTERS');
+
   const engines = {
     pharmacy: '../pharma-gaza/worker/worker.js',
     school: '../rowad-gaza-school/worker/worker.js',
+    restaurant: '../athar-restaurant/worker/adapter.js',
   };
-  for (const [product, file] of Object.entries(engines)) {
-    if (!existsSync(file)) continue;
-    const engine = readFileSync(file, 'utf8');
+  for (const product of wired) {
+    assert.ok(
+      engines[product],
+      `'${product}' is wired in PRODUCT_ADAPTERS but this test does not know where its engine lives`,
+    );
+    if (!existsSync(engines[product])) continue;
+    const engine = readFileSync(engines[product], 'utf8');
     for (const path of paths) {
       assert.ok(
         engine.includes(path),

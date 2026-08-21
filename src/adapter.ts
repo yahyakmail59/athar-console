@@ -103,6 +103,7 @@ export async function signedAdapterHeaders(
 const PRODUCT_ADAPTERS: Record<string, { binding: keyof Env; urlVar: keyof Env; label: string }> = {
   pharmacy: { binding: 'PHARMA_ADAPTER', urlVar: 'PHARMA_ADAPTER_URL', label: 'الصيدليات' },
   school: { binding: 'SCHOOL_ADAPTER', urlVar: 'SCHOOL_ADAPTER_URL', label: 'المدارس' },
+  restaurant: { binding: 'RESTAURANT_ADAPTER', urlVar: 'RESTAURANT_ADAPTER_URL', label: 'المطاعم' },
 };
 
 export const hasAdapter = (productId: string): boolean =>

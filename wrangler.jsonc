@@ -26,6 +26,10 @@
     {
       "binding": "SCHOOL_ADAPTER",
       "service": "athar-school-api"
+    },
+    {
+      "binding": "RESTAURANT_ADAPTER",
+      "service": "athar-restaurant-api"
     }
   ],
   "observability": {

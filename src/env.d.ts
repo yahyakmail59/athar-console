@@ -8,4 +8,6 @@ interface Env {
   PHARMA_ADAPTER_URL?: string;
   SCHOOL_ADAPTER: Fetcher;
   SCHOOL_ADAPTER_URL?: string;
+  RESTAURANT_ADAPTER: Fetcher;
+  RESTAURANT_ADAPTER_URL?: string;
 }

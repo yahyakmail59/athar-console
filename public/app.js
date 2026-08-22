@@ -108,6 +108,16 @@ const actionLabels = {
 const PRODUCTS_WITH_USERNAME = new Set(['school']);
 let createSchoolLogoDataUrl = '';
 
+// وصف كل هوية للعرض وحده عند الاختيار؛ القيم الفعلية (الألوان والخطوط) لا
+// تعيش هنا بل في `athar-restaurant/worker/brandkits.js` — هذا نص توضيحي
+// يطابقها يدويًا، والرمز نفسه (`code`) هو ما يصل فعليًا للمحرك.
+const RESTAURANT_BRAND_KIT_INFO = {
+  adana_classic: { description: 'أحمر وذهبي، Cairo وBebas Neue.', swatch: '#E30613' },
+  luxury_navy: { description: 'كحلي وذهبي مع طبقة فاخرة إضافية، Playfair Display.', swatch: '#0B1D2D' },
+  vibrant_emerald: { description: 'زمردي حيوي، Tajawal وOswald.', swatch: '#0F9D6B' },
+  warm_amber: { description: 'كهرماني دافئ، Almarai وAnton.', swatch: '#C2540A' },
+};
+
 const productIcons = { restaurant: '◉', school: '▤', pharmacy: '✚', clinic: '◇' };
 
 function badge(value) {
@@ -326,14 +336,35 @@ function updateCreateOptions() {
   const previousPlan = planSelect.value;
   planSelect.replaceChildren(...plansFor(productId).map((plan) => element('option', { value: plan.id, text: `${plan.name_ar} — ${money(plan.default_price_minor, plan.currency)}` })));
   if ([...planSelect.options].some((option) => option.value === previousPlan)) planSelect.value = previousPlan;
-  // حزمة الهوية مخفية حتى محرك المطاعم: لا محرك يقرؤها اليوم، وحقلٌ بلا أثر
-  // يعلّم المشغّل ألا يثق بما تعرضه اللوحة. الكتالوج يبقى في القاعدة كما هو.
   // اسم مستخدم المدير يظهر للمنتجات التي تستخدم أسماء مستخدمين. الصيدلية
   // تدخل برمزها ورقم سري بلا اسم، فإظهاره لها حقل بلا أثر.
   document.querySelectorAll('.username-only').forEach((field) => {
     field.hidden = !PRODUCTS_WITH_USERNAME.has(productId);
   });
   byId('school-logo-field').hidden = productId !== 'school';
+  // حزمة الهوية: محرك المطاعم يقرؤها فعلًا الآن ويطبّقها عند الإنشاء، فتظهر
+  // لهذا المنتج وحده — حقل بلا أثر لبقية المنتجات لا يزال يُخفى.
+  const brandKitField = byId('restaurant-brand-kit-field');
+  brandKitField.hidden = productId !== 'restaurant';
+  if (productId !== 'restaurant') {
+    // القيمة تبقى في DOM بعد التبديل بعيدًا عن المطاعم؛ لو تُركت كانت
+    // تُرسَل ضمن FormData مع منتج آخر فيرفضها التحقق في اللوحة بلا سبب
+    // ظاهر لمن يملأ النموذج — الحقل هنا لا يخصّ إلا المطاعم.
+    byId('create-brand-kit').replaceChildren();
+    byId('brand-kit-description').textContent = '';
+  } else {
+    const brandKitSelect = byId('create-brand-kit');
+    const kits = (state.dashboard.catalog.brandKits || []).filter((kit) => kit.product_id === 'restaurant');
+    const previousKit = brandKitSelect.value;
+    brandKitSelect.replaceChildren(...kits.map((kit) => element('option', { value: kit.id, text: kit.name })));
+    if ([...brandKitSelect.options].some((option) => option.value === previousKit)) brandKitSelect.value = previousKit;
+    const updateBrandKitDescription = () => {
+      const code = brandKitSelect.value.split(':').pop();
+      byId('brand-kit-description').textContent = RESTAURANT_BRAND_KIT_INFO[code]?.description || '';
+    };
+    brandKitSelect.onchange = updateBrandKitDescription;
+    updateBrandKitDescription();
+  }
   const chosen = state.dashboard.catalog.plans.find((plan) => plan.id === planSelect.value);
   byId('create-form').elements.price.value = chosen ? Number(chosen.default_price_minor) / 100 : '';
 }

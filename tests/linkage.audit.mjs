@@ -384,11 +384,11 @@ try {
     home.status === 200 && home.html.includes('مطعم التدقيق'),
     `${home.status} / ${home.html.length} حرفًا`);
 
-  const menuPage = await restaurantPage(restoPublicSlug, 'menu');
+  const menuPage = await restaurantPage(restoPublicSlug, 'menu/');
   check('مطعم/بيانات العرض', 'النسخة التجريبية تصل بمنيو كامل',
     menuPage.status === 200 && menuPage.html.includes('كباب أضنة')
     && menuPage.html.includes('شاورما لحم'),
-    `${(menuPage.html.match(/data-add=/g) || []).length} صنفًا قابلًا للطلب`);
+    `${(menuPage.html.match(/class="mini-whatsapp/g) || []).length} صنفًا قابلًا للطلب`);
 
   const restoDash = await restaurantApi(restoToken, '/api/dashboard');
   check('مطعم/لوحة التشغيل', 'بذرة العرض تُظهر أرقامًا لا أصفارًا',
@@ -396,26 +396,28 @@ try {
     `طلبات الأسبوع=${restoDash.payload?.week?.orders} إيراد=${restoDash.payload?.week?.revenue}`);
 
   // التسعير على الخادم: أهم فحص في هذا المنتج. نرسل سعرًا كاذبًا ونتأكد
-  // أن المحفوظ هو سعر قاعدة البيانات لا ما أرسله المتصفح.
+  // أن المحفوظ هو سعر قاعدة البيانات لا ما أرسله المتصفح. الحمولة والرد هنا
+  // عقد `site/js/main.js` الحرفي: `items`/`qty` لا `lines`/`quantity`.
   const menuJson = await restaurantApi(restoToken, '/api/content/menu_items');
   const pricedItem = menuJson.payload?.rows?.find((row) => Number(row.is_priced) && Number(row.price_minor) > 0);
-  const forgedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/api/orders`, {
+  const forgedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      customer_name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
-      lines: [{ item_id: pricedItem.id, quantity: 2, unit_price_minor: 1, total_minor: 1 }],
+      name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
+      items: [{ id: pricedItem.id, qty: 2, unit_price_minor: 1, total_minor: 1 }],
     }),
   });
   const forged = await forgedOrder.json().catch(() => null);
+  const forgedToken = String(forged?.order_url || '').match(/\/o\/([a-z0-9]+)\//)?.[1] || '';
   const storedOrders = await restaurantApi(restoToken, '/api/orders?limit=5');
-  const placed = storedOrders.payload?.orders?.find((order) => order.code === forged?.code);
+  const placed = storedOrders.payload?.orders?.find((order) => forgedToken && order.token === forgedToken);
   check('مطعم/التسعير', 'السعر يُحسب على الخادم ويتجاهل ما يرسله المتصفح',
     forgedOrder.status === 201 && Number(placed?.total_minor) === Number(pricedItem.price_minor) * 2,
     `المحفوظ=${placed?.total_minor} المتوقع=${Number(pricedItem.price_minor) * 2}`);
 
   // الإيصال يثبت أن resvg والخطوط على R2 يعملان في الإنتاج لا محليًا فقط.
-  const receipt = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/${placed?.token}/receipt.png`);
+  const receipt = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/o/${forgedToken}/receipt.png`);
   const receiptBytes = new Uint8Array(await receipt.arrayBuffer());
   check('مطعم/الإيصال', 'الإيصال يُرسم صورةً على الخادم بخطوط R2',
     receipt.status === 200 && receiptBytes[0] === 0x89 && receiptBytes.length > 5000,
@@ -429,34 +431,42 @@ try {
     restoRename.payload?.engine_synced === true && renamedHome.html.includes('مطعم باسم جديد'),
     renamedHome.html.includes('مطعم باسم جديد') ? 'وصل' : 'لم يصل');
 
+  // العلامة النصية (tagline) لا تُعرض على الصفحة الرئيسية في التصميم
+  // المنسوخ عن أضنة أصلًا — hero_text_ar هو ما يظهر فعلًا هناك.
   const stealName = await restaurantApi(restoToken, '/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name_ar: 'اسم سرقه المطعم', tagline_ar: 'شعار يملكه المطعم' }),
+    body: JSON.stringify({ name_ar: 'اسم سرقه المطعم', hero_text_ar: 'نص واجهة يملكه المطعم' }),
   });
   const afterSteal = await restaurantPage(restoPublicSlug);
-  check('مطعم/ملكية الهوية', 'المطعم لا يستطيع تغيير اسمه ويغيّر شعاره',
+  check('مطعم/ملكية الهوية', 'المطعم لا يستطيع تغيير اسمه ويغيّر نص واجهته',
     stealName.status === 200 && afterSteal.html.includes('مطعم باسم جديد')
-    && !afterSteal.html.includes('اسم سرقه المطعم') && afterSteal.html.includes('شعار يملكه المطعم'));
+    && !afterSteal.html.includes('اسم سرقه المطعم') && afterSteal.html.includes('نص واجهة يملكه المطعم'));
 
-  // النزول للباقة الأساسية يمنع حفظ الطلبات ويُبقي الموقع يعمل.
+  // النزول للباقة الأساسية: زر الإرسال في main.js يبقى يعمل (يرسل عبر
+  // واتساب) لكن بلا حفظ في القاعدة — هذا هو الفرق التجاري الحقيقي، لا رفض
+  // الطلب بـ402 الذي كان يكسر الزر لعميل الباقة الأرخص.
   const downgrade = await console_(`/api/tenants/${restoTenant.id}/plan`, {
     method: 'PATCH',
     body: JSON.stringify({ plan_id: catalog.plans.find((p) => p.id === 'restaurant:menu').id }),
   });
-  const blockedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/api/orders`, {
+  const beforeCount = (await restaurantApi(restoToken, '/api/orders?limit=200')).payload?.orders?.length || 0;
+  const notPersisted = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      customer_name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
-      lines: [{ item_id: pricedItem.id, quantity: 1 }],
+      name: 'تدقيق', phone: '0599000111', fulfillment: 'pickup',
+      items: [{ id: pricedItem.id, qty: 1 }],
     }),
   });
+  const notPersistedBody = await notPersisted.json().catch(() => null);
+  const afterCount = (await restaurantApi(restoToken, '/api/orders?limit=200')).payload?.orders?.length || 0;
   const siteStillUp = await restaurantPage(restoPublicSlug);
-  check('مطعم/تغيير الباقة', 'النزول يمنع حفظ الطلبات ويُبقي الموقع يعمل',
-    downgrade.payload?.engine_synced === true && blockedOrder.status === 402
-    && siteStillUp.status === 200,
-    `لوحة=${downgrade.status}/${downgrade.payload?.engine_synced} طلب=${blockedOrder.status} موقع=${siteStillUp.status}`);
+  check('مطعم/تغيير الباقة', 'النزول يرسل عبر واتساب بلا حفظ، ويُبقي الموقع يعمل',
+    downgrade.payload?.engine_synced === true && notPersisted.status === 201
+    && notPersistedBody?.order_url === '' && afterCount === beforeCount && siteStillUp.status === 200,
+    `لوحة=${downgrade.status}/${downgrade.payload?.engine_synced} طلب=${notPersisted.status} `
+    + `قبل=${beforeCount} بعد=${afterCount} موقع=${siteStillUp.status}`);
 
   const upgrade = await console_(`/api/tenants/${restoTenant.id}/plan`, {
     method: 'PATCH',

@@ -10,6 +10,12 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
   },
+
+  // نطاق مخصّص لا قاعدة توجيه: wrangler ينشئ سجل DNS بنفسه، ولوحة أثر
+  // مضيف واحد ثابت لا نمط. وهو أخصّ من `*.athar.date` فيسبقها.
+  "routes": [
+    { "pattern": "console.athar.date", "custom_domain": true }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

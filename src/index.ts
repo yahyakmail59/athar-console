@@ -20,6 +20,7 @@ import {
   type LifecycleResult,
   type ProvisionResult,
 } from './adapter';
+import { backupTargets, runBackup } from './backup';
 
 const SESSION_HOURS = 12;
 const PBKDF2_ROUNDS = 100_000;
@@ -1298,5 +1299,29 @@ export default {
       console.error(JSON.stringify({ level: 'error', event: 'request_failed', request_id: id, error: String(error) }));
       return jsonResponse({ error: 'حدث خطأ غير متوقع.', code: 'INTERNAL_ERROR', request_id: id }, 500);
     }
+  },
+
+  /**
+   * النسخ الاحتياطي الليلي.
+   *
+   * لا يرمي أبدًا: خطأ غير ملتقط هنا يظهر كتشغيل فاشل بلا تفصيل، فيصعب
+   * معرفة أي قاعدة سقطت. النتيجة تُسجَّل سطرًا واحدًا لكل قاعدة.
+   */
+  async scheduled(event, env, ctx): Promise<void> {
+    ctx.waitUntil((async () => {
+      const started = Date.now();
+      const results = await runBackup(backupTargets(env), env.BACKUPS);
+      for (const result of results) {
+        console.log(JSON.stringify({
+          level: result.ok ? 'info' : 'error',
+          event: 'backup', cron: event.cron, ...result,
+        }));
+      }
+      console.log(JSON.stringify({
+        level: 'info', event: 'backup_done', cron: event.cron,
+        ok: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length,
+        ms: Date.now() - started,
+      }));
+    })());
   },
 } satisfies ExportedHandler<Env>;

@@ -16,8 +16,39 @@
       "database_name": "athar-console",
       "database_id": "298b29d2-9d08-4853-86d1-3ec0b16c1377",
       "migrations_dir": "./migrations"
+    },
+    // قواعد المنتجات مربوطة للقراءة فقط لغرض النسخ الاحتياطي المجدول.
+    // ربطها مباشرة يغني عن رمز API لحساب كلاودفلير كاملًا، وهو سرّ أوسع
+    // صلاحية بكثير من قراءة أربع قواعد.
+    {
+      "binding": "BACKUP_RESTAURANT",
+      "database_name": "restaurant-db",
+      "database_id": "14685e7f-b0fe-4803-808f-2e463d0394ea"
+    },
+    {
+      "binding": "BACKUP_SCHOOL",
+      "database_name": "school-db",
+      "database_id": "fc6593ed-db7b-4b6e-bedf-ff1d65a4906a"
+    },
+    {
+      "binding": "BACKUP_PHARMA",
+      "database_name": "pharma-db",
+      "database_id": "bff19fd4-5831-4848-a4f5-1bc3ac281001"
     }
   ],
+
+  "r2_buckets": [
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "athar-backups"
+    }
+  ],
+
+  // كل ليلة 02:10 بتوقيت UTC — بعد منتصف الليل محليًا، فالنسخة تلتقط يومًا
+  // كاملًا منتهيًا لا يومًا نصفه في الماضي ونصفه في المستقبل.
+  "triggers": {
+    "crons": ["10 2 * * *"]
+  },
   "services": [
     {
       "binding": "PHARMA_ADAPTER",

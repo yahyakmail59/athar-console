@@ -152,6 +152,10 @@ function clientActions(tenant) {
   actions.append(button('الباقة', 'button-secondary', 'plan', tenant.id));
   actions.append(button('تعديل البيانات', 'button-secondary', 'edit', tenant.id));
   actions.append(button('السجل المالي', 'button-quiet', 'history', tenant.id));
+  actions.append(button(
+    Number(tenant.auto_suspend) ? 'إلغاء الإيقاف التلقائي' : 'تفعيل الإيقاف التلقائي',
+    'button-quiet', 'auto-suspend', tenant.id,
+  ));
   if (tenant.external_tenant_id) {
     actions.append(button('فحص الصحة', 'button-quiet', 'health', tenant.id));
     actions.append(button('بيانات دخول جديدة', 'button-quiet', 'reset-pin', tenant.id));
@@ -177,6 +181,9 @@ function clientCard(tenant) {
     detail('الباقة', tenant.plan_name), detail('السعر', money(tenant.price_minor, tenant.currency)),
     detail('مدفوع حتى', dateText(tenant.current_period_end)), detail('الرابط', tenant.public_url || 'بانتظار ربط المحرك'),
     detail('صحة المحرك', healthText(tenant)),
+    // الحالة تُعرض دائمًا لا عند التفعيل فقط: «مطفأ» معلومة يحتاجها المشغّل
+    // بقدر «مفعّل» — بها يعرف أن هذا العميل لن يتوقف مهما تأخر.
+    detail('الإيقاف عند عدم الدفع', autoSuspendText(tenant)),
   ]);
   // تاريخ انتهاء التجربة كان يُحفظ ولا يُعرض. إظهاره هنا يجعل الحقل مفيدًا
   // للمشغّل: يعرف أي عرض قارب على الانتهاء دون فتح كل عميل.
@@ -184,6 +191,18 @@ function clientCard(tenant) {
     details.append(detail('تنتهي التجربة', trialText(tenant.trial_expires_at)));
   }
   return element('article', { className: 'client-card' }, [header, badges, details, clientActions(tenant)]);
+}
+
+/**
+ * حالة الإيقاف التلقائي بالنصّ لا بعلامة صحّ.
+ *
+ * ومع المهلة صراحةً: «تلقائي بعد 3 أيام» تشرح ما سيحدث، بينما «مفعّل» تترك
+ * المشغّل يخمّن هل يتوقف العميل فورًا أم بعد مدة.
+ */
+function autoSuspendText(tenant) {
+  if (!Number(tenant.auto_suspend)) return 'مطفأ — لن يتوقف تلقائيًا';
+  if (tenant.grace_ends_at) return `مفعّل — المهلة تنتهي ${dateText(tenant.grace_ends_at)}`;
+  return 'مفعّل — تلقائي بعد 3 أيام من انتهاء الفترة';
 }
 
 const healthLabels = { healthy: 'سليم', degraded: 'متوقف داخل المحرك', unreachable: 'تعذر الوصول', unknown: 'لم يُفحص' };
@@ -615,7 +634,31 @@ async function handleClientAction(event) {
   else if (action === 'reset-pin') await resetOwnerPin(tenant);
   else if (action === 'history') await showHistory(tenant);
   else if (action === 'retry') await retryProvision(tenant);
+  // فرع صريح: ما لا يُذكر هنا يذهب إلى `lifecycle` فيُرفض كإجراء مجهول.
+  else if (action === 'auto-suspend') await toggleAutoSuspend(tenant);
   else await lifecycle(tenant, action);
+}
+
+/**
+ * يفتح أو يغلق الإيقاف التلقائي.
+ *
+ * التفعيل يستأذن، والإلغاء لا: التفعيل يعني أن برنامجًا سيقطع خدمة عميل بلا
+ * حضورك، والإلغاء يعني أن أحدًا لن يُقطع — والثاني لا يحتاج تحذيرًا.
+ */
+async function toggleAutoSuspend(tenant) {
+  const enabling = !Number(tenant.auto_suspend);
+  if (enabling && !window.confirm(
+    `تفعيل الإيقاف التلقائي لـ«${tenant.display_name}»؟\n\n`
+    + 'عند انتهاء فترة الاشتراك تُفتح مهلة 3 أيام تعمل فيها الخدمة كالمعتاد، '
+    + 'ثم تتوقف تلقائيًا حتى تسجيل الدفعة.',
+  )) return;
+  try {
+    await api(`/api/tenants/${encodeURIComponent(tenant.id)}/auto-suspend`, {
+      method: 'POST', body: JSON.stringify({ enabled: enabling }),
+    });
+    showToast(enabling ? 'فُعِّل الإيقاف التلقائي.' : 'أُلغي الإيقاف التلقائي.');
+    await loadDashboard(true);
+  } catch (error) { showToast(error.message, true); }
 }
 
 function openCustomerDialog(tenant) {

@@ -286,7 +286,7 @@ async function dashboard(env: Env): Promise<Response> {
          p.name_ar AS product_name,
          pl.name_ar AS plan_name,
          s.id AS subscription_id, s.status AS subscription_status, s.price_minor,
-         s.currency, s.billing_cycle, s.current_period_end, s.grace_ends_at,
+         s.currency, s.billing_cycle, s.current_period_end, s.grace_ends_at, s.auto_suspend,
          (SELECT MAX(sp.paid_at) FROM subscription_payments sp WHERE sp.subscription_id = s.id) AS last_paid_at
        FROM tenants t
        JOIN customers c ON c.id = t.customer_id
@@ -774,6 +774,35 @@ async function lifecycle(request: Request, env: Env, tenantId: string, ipHash: s
     status: nextStatus,
     engine_missing: detachedFromEngine || undefined,
   });
+}
+
+/**
+ * يفتح أو يغلق الإيقاف التلقائي لاشتراك عميل.
+ *
+ * بُني محرك الفوترة أولًا بلا هذا المسار، فصارت ميزة لا سبيل إلى تشغيلها من
+ * اللوحة: قلتُ لصاحبها «اضبط العمود في قاعدة البيانات» وهو لا يفتح قاعدة
+ * بيانات. ميزة بلا مفتاح ليست ميزة.
+ *
+ * يُسجَّل في سجل العمليات كغيره: قرار يقطع خدمة عميل يجب أن يُعرف متى اتُّخذ
+ * ومن أي جهاز.
+ */
+async function setAutoSuspend(
+  request: Request, env: Env, tenantId: string, ipHash: string,
+): Promise<Response> {
+  const body = await readJson(request);
+  const enabled = body.enabled ? 1 : 0;
+  const before = await env.DB.prepare(
+    'SELECT id, auto_suspend FROM subscriptions WHERE tenant_id = ?',
+  ).bind(tenantId).first();
+  if (!before) throw new HttpError(404, 'NOT_FOUND', 'لا اشتراك لهذا العميل.');
+
+  await env.DB.batch([
+    env.DB.prepare('UPDATE subscriptions SET auto_suspend = ?, updated_at = ? WHERE tenant_id = ?')
+      .bind(enabled, nowIso(), tenantId),
+    auditStatement(env, request, 'subscription.auto_suspend', 'subscription',
+      String(before.id), before, { auto_suspend: enabled }, ipHash),
+  ]);
+  return jsonResponse({ ok: true, auto_suspend: enabled });
 }
 
 async function recordPayment(request: Request, env: Env, ipHash: string): Promise<Response> {
@@ -1266,6 +1295,18 @@ async function api(request: Request, env: Env): Promise<Response> {
     await markNoticeDelivered(env, decodeURIComponent(noticeMatch[1] ?? ''));
     return jsonResponse({ ok: true });
   }
+  /**
+   * تبديل الإيقاف التلقائي لاشتراك.
+   *
+   * بُني المحرك أولًا بلا هذا المسار، فصارت ميزة لا سبيل إلى تشغيلها من
+   * اللوحة — قلتُ لصاحبها «اضبط العمود في القاعدة» وهو لا يفتح قاعدة بيانات.
+   * ميزة بلا مفتاح ليست ميزة.
+   */
+  const autoSuspendMatch = path.match(/^\/api\/tenants\/([^/]+)\/auto-suspend$/);
+  if (autoSuspendMatch && request.method === 'POST') {
+    return setAutoSuspend(request, env, decodeURIComponent(autoSuspendMatch[1] ?? ''), ipHash);
+  }
+
   // تشغيل الدورة يدويًا — لاختبارها بلا انتظار الليل.
   if (path === '/api/billing/run' && request.method === 'POST') {
     return jsonResponse({ ok: true, ...(await runBillingCycle(env, Date.now(), suspendTenantInEngine(env))) });

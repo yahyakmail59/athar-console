@@ -11,10 +11,15 @@
     "run_worker_first": ["/api/*"]
   },
 
-  // نطاق مخصّص لا قاعدة توجيه: wrangler ينشئ سجل DNS بنفسه، ولوحة أثر
-  // مضيف واحد ثابت لا نمط. وهو أخصّ من `*.athar.date` فيسبقها.
+  // قاعدة توجيه صريحة لا نطاقًا مخصّصًا.
+  //
+  // كان `custom_domain: true`، وافترضتُ أنه يسبق `*.athar.date/*` في محرك
+  // المطاعم. لم يفعل: بعد نشر النمط صار `console.athar.date` يعرض لوحة
+  // المطاعم. القواعد تتنافس بالتخصيص، وهذه أخصّ من النمط فتغلبه.
+  //
+  // سجل DNS لا يلزم: `*.athar.date` الشامل يغطّي هذا المضيف أصلًا.
   "routes": [
-    { "pattern": "console.athar.date", "custom_domain": true }
+    { "pattern": "console.athar.date/*", "zone_name": "athar.date" }
   ],
   "d1_databases": [
     {

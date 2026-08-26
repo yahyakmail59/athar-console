@@ -392,7 +392,7 @@ function setView(view) {
   state.view = view;
   const titles = { overview: ['مساحة العمل', 'نظرة عامة'], clients: ['إدارة المساحات', 'العملاء'], plans: ['الكتالوج التجاري', 'الباقات والأسعار'], archive: ['العملاء المؤرشفون', 'الأرشيف'], audit: ['المراقبة', 'سجل العمليات'] };
   document.querySelectorAll('.page-view').forEach((section) => { section.hidden = section.id !== `${view}-view`; });
-  document.querySelectorAll('.nav-item').forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
+  document.querySelectorAll('.nav-item[data-view]').forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
   byId('page-kicker').textContent = titles[view][0];
   byId('page-title').textContent = titles[view][1];
   document.body.classList.remove('sidebar-open');
@@ -846,7 +846,9 @@ function bindEvents() {
   document.querySelectorAll('[data-open-create]').forEach((node) => node.addEventListener('click', openCreateDialog));
   byId('refresh-button').addEventListener('click', () => loadDashboard());
   byId('menu-button').addEventListener('click', () => document.body.classList.toggle('sidebar-open'));
-  document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
+  // `[data-view]` لا `.nav-item` وحدها: القائمة تحوي رابطًا خارجيًا يحمل
+  // الصنف نفسه للتنسيق، وربطه هنا يعني `setView(undefined)` عند نقره.
+  document.querySelectorAll('.nav-item[data-view]').forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
   document.querySelectorAll('[data-view-jump]').forEach((item) => item.addEventListener('click', () => setView(item.dataset.viewJump)));
   ['client-search', 'product-filter', 'environment-filter', 'status-filter'].forEach((id) => byId(id).addEventListener(id === 'client-search' ? 'input' : 'change', renderClients));
   document.querySelectorAll('[data-layout]').forEach((item) => item.addEventListener('click', () => {

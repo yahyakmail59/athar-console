@@ -21,6 +21,7 @@ import {
   type ProvisionResult,
 } from './adapter';
 import { backupTargets, runBackup } from './backup';
+import { markNoticeDelivered, pendingNotices, runBillingCycle } from './billing';
 
 const SESSION_HOURS = 12;
 const PBKDF2_ROUNDS = 100_000;
@@ -252,6 +253,26 @@ async function loadCatalog(env: Env): Promise<{ products: unknown[]; plans: Cata
     brandKits: brandResult.results || [],
   };
 }
+
+/**
+ * يوصل أمر الإيقاف إلى محرك المنتج — الوجه الشبكي لدورة الفوترة.
+ *
+ * يعيش هنا لا في `billing.ts`: منطق «متى نوقف» يجب أن يُختبر بلا شبكة ولا
+ * توقيع، وهذا هو الجزء الذي يحتاج الاثنين. منتج بلا محوّل يُتجاوز بصمت،
+ * فالإيقاف التجاري في اللوحة يبقى صحيحًا وإن لم يكن للمنتج محرك بعد.
+ */
+const suspendTenantInEngine = (env: Env) => async (
+  tenantId: string, productId: string,
+): Promise<void> => {
+  if (!hasAdapter(productId)) return;
+  const requestId = crypto.randomUUID();
+  await callProductAdapter(env, productId, {
+    method: 'POST',
+    path: `/internal/v1/tenants/${encodeURIComponent(tenantId)}/status`,
+    requestId,
+    body: { request_id: requestId, tenant_id: tenantId, action: 'suspend' },
+  });
+};
 
 async function dashboard(env: Env): Promise<Response> {
   const [catalog, tenantResult, metrics, auditResult] = await Promise.all([
@@ -1235,6 +1256,20 @@ async function api(request: Request, env: Env): Promise<Response> {
     );
   }
   if (path === '/api/dashboard' && request.method === 'GET') return dashboard(env);
+
+  // الإشعارات المالية التي لم تُبلَّغ بعد، ومعها رسالة واتساب جاهزة.
+  if (path === '/api/notices' && request.method === 'GET') {
+    return jsonResponse({ ok: true, notices: await pendingNotices(env) });
+  }
+  const noticeMatch = path.match(/^\/api\/notices\/([^/]+)\/delivered$/);
+  if (noticeMatch && request.method === 'POST') {
+    await markNoticeDelivered(env, decodeURIComponent(noticeMatch[1] ?? ''));
+    return jsonResponse({ ok: true });
+  }
+  // تشغيل الدورة يدويًا — لاختبارها بلا انتظار الليل.
+  if (path === '/api/billing/run' && request.method === 'POST') {
+    return jsonResponse({ ok: true, ...(await runBillingCycle(env, Date.now(), suspendTenantInEngine(env))) });
+  }
   if (path === '/api/tenants' && request.method === 'POST') return createTenant(request, env, ipHash);
   if (path === '/api/payments' && request.method === 'POST') return recordPayment(request, env, ipHash);
   if (path === '/api/audit' && request.method === 'GET') return auditLog(env, url);
@@ -1321,6 +1356,14 @@ export default {
         level: 'info', event: 'backup_done', cron: event.cron,
         ok: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length,
         ms: Date.now() - started,
+      }));
+
+      // دورة الاشتراكات بعد النسخ لا قبله: الإيقاف يغيّر بيانات، ونسخة
+      // اليوم يجب أن تلتقط ما كان عليه الحال قبل أن يغيّره التشغيل الآلي.
+      const billing = await runBillingCycle(env, Date.now(), suspendTenantInEngine(env));
+      console.log(JSON.stringify({
+        level: billing.failures.length ? 'error' : 'info',
+        event: 'billing_cycle', cron: event.cron, ...billing,
       }));
     })());
   },

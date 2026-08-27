@@ -15,6 +15,7 @@ import {
 import {
   ProductAdapterError,
   callProductAdapter,
+  callSiteAdapter,
   hasAdapter,
   type HealthResult,
   type LifecycleResult,
@@ -22,6 +23,10 @@ import {
 } from './adapter';
 import { backupTargets, runBackup } from './backup';
 import { markNoticeDelivered, pendingNotices, runBillingCycle } from './billing';
+import { syncLeads, unreadLeadCount, type LeadChannel, type RemoteLead } from './leads';
+import { syncShowcase, type ShowcaseItem } from './showcase';
+import { revenueReport } from './reports';
+import { limitsReport } from './limits';
 
 const SESSION_HOURS = 12;
 const PBKDF2_ROUNDS = 100_000;
@@ -274,8 +279,62 @@ const suspendTenantInEngine = (env: Env) => async (
   });
 };
 
+/**
+ * قناة نداء موقع أثر: تحوّل `callSiteAdapter` إلى الواجهة التي يفهمها
+ * `syncLeads` — فيبقى منطق الاستيراد جاهلًا بالتوقيع والشبكة.
+ */
+function siteLeadChannel(env: Env): LeadChannel {
+  return {
+    fetchLeads: async (limit) => {
+      const payload = await callSiteAdapter<{ ok: true; leads: RemoteLead[] }>(env, {
+        method: 'GET',
+        path: `/internal/v1/leads?limit=${limit}`,
+        requestId: crypto.randomUUID(),
+      });
+      return Array.isArray(payload.leads) ? payload.leads : [];
+    },
+    acknowledge: async (ids) => {
+      const requestId = crypto.randomUUID();
+      await callSiteAdapter(env, {
+        method: 'POST',
+        path: '/internal/v1/leads/ack',
+        requestId,
+        body: { request_id: requestId, ids },
+      });
+    },
+  };
+}
+
+/** يدفع قائمة التجارب إلى موقع أثر عبر القناة الموقَّعة نفسها. */
+function pushShowcase(env: Env) {
+  return async (items: ShowcaseItem[]) => {
+    const requestId = crypto.randomUUID();
+    const payload = await callSiteAdapter<{ ok: true; stored: number }>(env, {
+      method: 'POST',
+      path: '/internal/v1/showcase',
+      requestId,
+      body: { request_id: requestId, items },
+    });
+    return { stored: Number(payload.stored) || 0 };
+  };
+}
+
+/** العملاء المحتملون المستوردون، الأحدث أولًا. */
+async function listLeads(env: Env, url: URL): Promise<Response> {
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
+  const rows = await env.DB.prepare(
+    `SELECT l.id, l.customer_id, l.name, l.email, l.phone, l.business_type,
+            l.service_label, l.message, l.is_read, l.received_at,
+            c.status AS customer_status
+     FROM lead_messages l
+     LEFT JOIN customers c ON c.id = l.customer_id
+     ORDER BY l.received_at DESC LIMIT ?`,
+  ).bind(limit).all();
+  return jsonResponse({ ok: true, leads: rows.results ?? [] });
+}
+
 async function dashboard(env: Env): Promise<Response> {
-  const [catalog, tenantResult, metrics, auditResult] = await Promise.all([
+  const [catalog, tenantResult, metrics, auditResult, unreadLeads] = await Promise.all([
     loadCatalog(env),
     env.DB.prepare(
       `SELECT
@@ -315,6 +374,7 @@ async function dashboard(env: Env): Promise<Response> {
       `SELECT id, action, entity_type, entity_id, after_json, created_at
        FROM audit_logs ORDER BY created_at DESC LIMIT 12`,
     ).all(),
+    unreadLeadCount(env.DB),
   ]);
 
   return jsonResponse({
@@ -323,6 +383,7 @@ async function dashboard(env: Env): Promise<Response> {
     tenants: tenantResult.results || [],
     metrics: metrics || { total: 0, active: 0, draft: 0, demos: 0, due: 0, monthly_minor: 0 },
     recentAudit: auditResult.results || [],
+    unreadLeads,
   });
 }
 
@@ -1285,6 +1346,32 @@ async function api(request: Request, env: Env): Promise<Response> {
     );
   }
   if (path === '/api/dashboard' && request.method === 'GET') return dashboard(env);
+  // العملاء المحتملون من نموذج التواصل في موقع أثر.
+  if (path === '/api/leads' && request.method === 'GET') return listLeads(env, url);
+  // تقرير الإيراد والتجديدات. نافذة التجديد قابلة للضبط، وافتراضها شهر.
+  // حدود المنصة: حجم القواعد وسطل النسخ وما ينقص من النسخ.
+  if (path === '/api/reports/limits' && request.method === 'GET') {
+    return jsonResponse({
+      ok: true,
+      report: await limitsReport(backupTargets(env), env.BACKUPS, Date.now()),
+    });
+  }
+  if (path === '/api/reports/revenue' && request.method === 'GET') {
+    const windowDays = Math.min(Math.max(Number(url.searchParams.get('days')) || 30, 1), 180);
+    return jsonResponse({ ok: true, report: await revenueReport(env.DB, Date.now(), windowDays) });
+  }
+  if (path === '/api/showcase/sync' && request.method === 'POST') {
+    return jsonResponse({ ok: true, ...(await syncShowcase(env, pushShowcase(env))) });
+  }
+  if (path === '/api/leads/sync' && request.method === 'POST') {
+    return jsonResponse({ ok: true, ...(await syncLeads(env, siteLeadChannel(env), Date.now())) });
+  }
+  const leadReadMatch = path.match(/^\/api\/leads\/([^/]+)\/read$/);
+  if (leadReadMatch && request.method === 'POST') {
+    await env.DB.prepare('UPDATE lead_messages SET is_read = 1 WHERE id = ?')
+      .bind(decodeURIComponent(leadReadMatch[1] ?? '')).run();
+    return jsonResponse({ ok: true });
+  }
 
   // الإشعارات المالية التي لم تُبلَّغ بعد، ومعها رسالة واتساب جاهزة.
   if (path === '/api/notices' && request.method === 'GET') {
@@ -1362,10 +1449,29 @@ async function api(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request, env): Promise<Response> {
+  async fetch(request, env, ctx): Promise<Response> {
     try {
       const url = new URL(request.url);
-      if (url.pathname.startsWith('/api/')) return await api(request, env);
+      if (url.pathname.startsWith('/api/')) {
+        const response = await api(request, env);
+
+        // أي تغيير على المستأجرين قد يغيّر مجموعة التجارب المعروضة: إنشاء
+        // تجربة، أرشفتها، إيقافها، حذفها. فتُدفَع القائمة من جديد هنا بدل
+        // انتظار الليل أو تذكُّر زرّ — تجربة مؤرشفة يبقى رابطها معلنًا
+        // للزوار عطلٌ يراه العميل قبلنا.
+        //
+        // `waitUntil` لا `await`: الدفع لا يجوز أن يؤخّر ردّ اللوحة ولا أن
+        // يُفشل عملية نجحت. والدفع استبدال كامل فتكراره بلا أثر.
+        if (response.ok && request.method !== 'GET' && url.pathname.startsWith('/api/tenants')) {
+          ctx.waitUntil(syncShowcase(env, pushShowcase(env)).catch((error: unknown) => {
+            console.log(JSON.stringify({
+              level: 'warn', event: 'showcase_sync_after_change',
+              error: error instanceof Error ? error.message : String(error),
+            }));
+          }));
+        }
+        return response;
+      }
       return await env.ASSETS.fetch(request);
     } catch (error: unknown) {
       if (error instanceof HttpError) {
@@ -1399,6 +1505,31 @@ export default {
         ms: Date.now() - started,
       }));
 
+      // قياس الحدود بعد النسخ مباشرة: نسخة الليلة تكون قد كُتبت، فيكشف
+      // القياس ما نقص منها. وهذا أهم من الحجم: الامتلاء يُعلن عن نفسه بخطأ،
+      // وغياب النسخة لا يُكتشف إلا يوم الاستعادة.
+      try {
+        const limits = await limitsReport(backupTargets(env), env.BACKUPS, Date.now());
+        for (const warning of limits.warnings) {
+          console.log(JSON.stringify({
+            level: warning.level === 'critical' ? 'error' : 'warn',
+            event: 'platform_limit', cron: event.cron,
+            severity: warning.level, resource: warning.resource, message: warning.message,
+          }));
+        }
+        console.log(JSON.stringify({
+          level: 'info', event: 'platform_usage', cron: event.cron,
+          d1: limits.d1.map((row) => ({ name: row.name, mb: Math.round(row.size_bytes / 1048576 * 10) / 10 })),
+          r2_objects: limits.r2?.objects ?? 0,
+          r2_mb: Math.round((limits.r2?.size_bytes ?? 0) / 1048576 * 10) / 10,
+        }));
+      } catch (error) {
+        console.log(JSON.stringify({
+          level: 'error', event: 'platform_limit_check', cron: event.cron,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
+
       // دورة الاشتراكات بعد النسخ لا قبله: الإيقاف يغيّر بيانات، ونسخة
       // اليوم يجب أن تلتقط ما كان عليه الحال قبل أن يغيّره التشغيل الآلي.
       const billing = await runBillingCycle(env, Date.now(), suspendTenantInEngine(env));
@@ -1406,6 +1537,22 @@ export default {
         level: billing.failures.length ? 'error' : 'info',
         event: 'billing_cycle', cron: event.cron, ...billing,
       }));
+
+      // سحب العملاء المحتملين آخرًا: فشله لا يجوز أن يمنع النسخ ولا الفوترة،
+      // وهما الأثقل أثرًا. ورسائل الموقع تبقى محفوظة هناك حتى الدورة التالية.
+      try {
+        const leads = await syncLeads(env, siteLeadChannel(env), Date.now());
+        console.log(JSON.stringify({ level: 'info', event: 'leads_sync', cron: event.cron, ...leads }));
+        // التجارب بعد العملاء وفي نفس الحارس: كلاهما نداء لموقع أثر، وسقوط
+        // الموقع يجب ألا يظهر إلا سطرًا في السجل.
+        const showcase = await syncShowcase(env, pushShowcase(env));
+        console.log(JSON.stringify({ level: 'info', event: 'showcase_sync', cron: event.cron, ...showcase }));
+      } catch (error) {
+        console.log(JSON.stringify({
+          level: 'error', event: 'leads_sync', cron: event.cron,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
     })());
   },
 } satisfies ExportedHandler<Env>;

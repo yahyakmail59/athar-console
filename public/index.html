@@ -35,7 +35,9 @@
       <nav class="nav-list" aria-label="التنقل الرئيسي">
         <button class="nav-item is-active" data-view="overview" type="button"><span>⌂</span> نظرة عامة</button>
         <button class="nav-item" data-view="clients" type="button"><span>◎</span> العملاء</button>
+        <button class="nav-item" data-view="leads" type="button"><span>✉</span> العملاء المحتملون <span id="leads-badge" class="nav-badge" hidden></span></button>
         <button class="nav-item" data-view="plans" type="button"><span>◇</span> الباقات والأسعار</button>
+        <button class="nav-item" data-view="reports" type="button"><span>▤</span> التقارير</button>
         <button class="nav-item" data-view="archive" type="button"><span>🗄</span> الأرشيف</button>
         <button class="nav-item" data-view="audit" type="button"><span>≡</span> سجل العمليات</button>
         <!-- لوحة أخرى لا شاشة في هذه: تدير محتوى الموقع التعريفي بقاعدتها
@@ -99,6 +101,7 @@
         </div>
         <div class="section-heading compact-heading">
           <div><p id="client-count" class="eyebrow"></p><h2>مساحات العملاء</h2></div>
+          <button id="sync-showcase-button" class="button button-secondary" type="button" title="النسخ التجريبية النشطة تُعرض للزوار في athar.date. تُحدَّث تلقائيًا عند أي تغيير، وهذا الزر لإجبار التحديث الآن.">تحديث التجارب المعروضة في athar.date</button>
           <div class="view-toggle" aria-label="طريقة العرض">
             <button class="is-active" data-layout="grid" type="button" aria-label="بطاقات">▦</button>
             <button data-layout="table" type="button" aria-label="جدول">☷</button>
@@ -113,6 +116,44 @@
           <p class="muted">الأسعار تُحفظ بأصغر وحدة للعملة لتجنب أخطاء الحساب.</p>
         </div>
         <div id="plans-container" class="plans-grid"></div>
+      </section>
+
+      <section id="leads-view" class="page-view" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">من نموذج التواصل</p><h2>العملاء المحتملون</h2></div>
+          <button id="sync-leads-button" class="button button-secondary" type="button">سحب الجديد الآن</button>
+        </div>
+        <p class="muted">تصل من نموذج التواصل في athar.date، وتُسحب تلقائيًا كل ليلة. كل رسالة تُنشئ عميلًا بحالة «محتمل» أو تُربط بعميل قائم بالرقم نفسه.</p>
+        <div id="leads-container" class="client-grid"></div>
+      </section>
+
+      <section id="reports-view" class="page-view" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">المال والتجديدات</p><h2>التقارير</h2></div>
+          <button id="load-reports-button" class="button button-secondary" type="button">تحديث التقرير</button>
+        </div>
+        <div id="reports-money" class="metrics-grid"></div>
+        <div class="panel table-panel">
+          <div class="section-heading" style="padding:18px 20px 0"><div><h3>تجديدات الثلاثين يومًا القادمة</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th>العميل</th><th>المساحة</th><th>ينتهي في</th><th>باقٍ</th><th>المبلغ</th><th>إيقاف تلقائي</th></tr></thead><tbody id="renewals-body"></tbody></table></div>
+        </div>
+        <div class="panel table-panel">
+          <div class="section-heading" style="padding:18px 20px 0"><div><h3>المتأخرون</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th>العميل</th><th>المساحة</th><th>الحالة</th><th>متأخر منذ</th><th>المبلغ</th><th>تواصل</th></tr></thead><tbody id="overdue-body"></tbody></table></div>
+        </div>
+        <div class="panel table-panel">
+          <div class="section-heading" style="padding:18px 20px 0"><div><h3>المحصَّل شهريًا — آخر اثني عشر شهرًا</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th>الشهر</th><th>المحصَّل</th></tr></thead><tbody id="collected-body"></tbody></table></div>
+        </div>
+        <div class="panel table-panel">
+          <div class="section-heading" style="padding:18px 20px 0"><div><h3>الإيراد المتكرر حسب المنتج</h3></div></div>
+          <div class="table-scroll"><table><thead><tr><th>المنتج</th><th>مساحات نشطة</th><th>إيراد شهري</th></tr></thead><tbody id="by-product-body"></tbody></table></div>
+        </div>
+        <div class="panel table-panel">
+          <div class="section-heading" style="padding:18px 20px 0"><div><h3>حدود المنصة</h3><p class="muted">تُقاس ليليًا بعد النسخ الاحتياطي. عدد الطلبات وزمن المعالج يُقرآن من لوحة كلاودفلير — قراءتهما من هنا تحتاج رمزًا واسع الصلاحية.</p></div></div>
+          <div id="limits-warnings"></div>
+          <div class="table-scroll"><table><thead><tr><th>المورد</th><th>المستخدَم</th><th>من الحد</th></tr></thead><tbody id="limits-body"></tbody></table></div>
+        </div>
       </section>
 
       <section id="archive-view" class="page-view" hidden>

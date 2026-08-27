@@ -4,7 +4,12 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-19",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": true,
+  // مغلق: العناوين المعتمدة على athar.date وحدها.
+  //
+  // عنوان workers.dev يبقى بابًا ثانيًا للخدمة نفسها: يُفهرس، ويُنسخ في
+  // رسالة لعميل، ثم يُعطَّل يومًا فيظهر العطل عند من حفظه لا عندنا. وقد
+  // وقع هذا فعلًا — واجهة الصيدلية كانت تناديه فسقط الدخول كله.
+  "workers_dev": false,
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -72,6 +77,11 @@
     {
       "binding": "RESTAURANT_ADAPTER",
       "service": "athar-restaurant-api"
+    },
+    // موقع أثر التعريفي: يُنادى لسحب العملاء المحتملين من نموذج التواصل.
+    {
+      "binding": "SITE_ADAPTER",
+      "service": "athar-site"
     }
   ],
   "observability": {

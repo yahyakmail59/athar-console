@@ -10,4 +10,8 @@ interface Env {
   SCHOOL_ADAPTER_URL?: string;
   RESTAURANT_ADAPTER: Fetcher;
   RESTAURANT_ADAPTER_URL?: string;
+  // موقع أثر التعريفي: ليس محرك منتج، لكنه يُنادى بالتوقيع نفسه لسحب
+  // العملاء المحتملين من نموذج التواصل.
+  SITE_ADAPTER: Fetcher;
+  SITE_ADAPTER_URL?: string;
 }

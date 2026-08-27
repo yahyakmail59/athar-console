@@ -109,6 +109,13 @@ const PRODUCT_ADAPTERS: Record<string, { binding: keyof Env; urlVar: keyof Env; 
 export const hasAdapter = (productId: string): boolean =>
   Object.hasOwn(PRODUCT_ADAPTERS, productId);
 
+type AdapterTarget = { binding: keyof Env; urlVar: keyof Env; label: string; host: string };
+
+/** موقع أثر ليس منتجًا بمستأجرين، لكنه يُنادى بالتوقيع نفسه لتسليم العملاء المحتملين. */
+const SITE_ADAPTER: AdapterTarget = {
+  binding: 'SITE_ADAPTER', urlVar: 'SITE_ADAPTER_URL', label: 'موقع أثر', host: 'site-adapter.internal',
+};
+
 export async function callProductAdapter<T>(
   env: Env,
   productId: string,
@@ -118,6 +125,18 @@ export async function callProductAdapter<T>(
   if (!config) {
     throw new ProductAdapterError(422, 'ADAPTER_NOT_AVAILABLE', 'هذا المنتج غير مربوط بمحرك تلقائي بعد.');
   }
+  return callAdapter<T>(env, { ...config, host: `${productId}-adapter.internal` }, input);
+}
+
+/** ينادي موقع أثر على مسارات `/internal/v1/leads`. */
+export const callSiteAdapter = <T,>(env: Env, input: AdapterRequest): Promise<T> =>
+  callAdapter<T>(env, SITE_ADAPTER, input);
+
+async function callAdapter<T>(
+  env: Env,
+  config: AdapterTarget,
+  input: AdapterRequest,
+): Promise<T> {
   const rawBody = input.body ? JSON.stringify(input.body) : '';
   const headers = await signedAdapterHeaders(
     env.ATHAR_ADAPTER_SECRET,
@@ -133,7 +152,7 @@ export async function callProductAdapter<T>(
   }
   const url = fallback
     ? new URL(input.path, fallback).toString()
-    : `https://${productId}-adapter.internal${input.path}`;
+    : `https://${config.host}${input.path}`;
   const init: RequestInit = {
     method: input.method,
     headers,

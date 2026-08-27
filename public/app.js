@@ -5,6 +5,9 @@ const state = {
   layout: 'grid',
   archived: [],
   purge: { tenant: null, checksum: '' },
+  leads: [],
+  report: null,
+  limits: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -271,6 +274,14 @@ function renderClients() {
   for (const tenant of tenants) container.append(clientCard(tenant));
 }
 
+/** شارة العدد غير المقروء: العميل المحتمل يفقد قيمته بالتأخير، فيجب أن يُرى بلا فتح تبويب. */
+function renderLeadsBadge() {
+  const badge = byId('leads-badge');
+  const count = Number(state.dashboard?.unreadLeads || 0);
+  badge.textContent = count > 99 ? '99+' : String(count);
+  badge.hidden = count === 0;
+}
+
 function renderMetrics() {
   const metrics = state.dashboard.metrics || {};
   const cards = [
@@ -395,6 +406,7 @@ function renderAll() {
   renderClients();
   renderPlans();
   renderAudit();
+  renderLeadsBadge();
 }
 
 async function loadDashboard(quiet = false) {
@@ -409,7 +421,7 @@ async function loadDashboard(quiet = false) {
 
 function setView(view) {
   state.view = view;
-  const titles = { overview: ['مساحة العمل', 'نظرة عامة'], clients: ['إدارة المساحات', 'العملاء'], plans: ['الكتالوج التجاري', 'الباقات والأسعار'], archive: ['العملاء المؤرشفون', 'الأرشيف'], audit: ['المراقبة', 'سجل العمليات'] };
+  const titles = { overview: ['مساحة العمل', 'نظرة عامة'], clients: ['إدارة المساحات', 'العملاء'], plans: ['الكتالوج التجاري', 'الباقات والأسعار'], leads: ['من نموذج التواصل', 'العملاء المحتملون'], reports: ['المال والتجديدات', 'التقارير'], archive: ['العملاء المؤرشفون', 'الأرشيف'], audit: ['المراقبة', 'سجل العمليات'] };
   document.querySelectorAll('.page-view').forEach((section) => { section.hidden = section.id !== `${view}-view`; });
   document.querySelectorAll('.nav-item[data-view]').forEach((item) => item.classList.toggle('is-active', item.dataset.view === view));
   byId('page-kicker').textContent = titles[view][0];
@@ -417,6 +429,8 @@ function setView(view) {
   document.body.classList.remove('sidebar-open');
   window.location.hash = view;
   if (view === 'archive') void loadArchive(true);
+  if (view === 'leads') void loadLeads(true);
+  if (view === 'reports') void loadReports(true);
 }
 
 function openCreateDialog() {
@@ -747,6 +761,218 @@ function archiveCard(tenant) {
   return element('article', { className: 'client-card' }, [header, element('div', { className: 'badges' }, [badge('archived')]), details, actions]);
 }
 
+/**
+ * بطاقة عميل محتمل.
+ *
+ * الرسالة كاملة لا مقتطعة: نصّ العميل هو كل ما نملكه عنه قبل أن يردّ أحد،
+ * وقصّه يعني فتح صندوق آخر لقراءته — وهو ما جاء هذا التبويب ليُلغيه.
+ */
+function leadCard(lead) {
+  const header = element('div', { className: 'client-card-header' }, [
+    element('div', { className: 'product-icon', text: lead.is_read ? '✓' : '✉', attrs: { 'aria-hidden': 'true' } }),
+    element('div', { className: 'client-title' }, [
+      element('h3', { text: lead.name }),
+      element('p', { text: [lead.business_type, lead.service_label].filter(Boolean).join(' · ') || 'بلا تصنيف' }),
+    ]),
+  ]);
+  const details = element('div', { className: 'client-details' }, [
+    detail('الهاتف', lead.phone),
+    detail('البريد', lead.email),
+    detail('وصلت في', dateText(lead.received_at)),
+    detail('حالة العميل', statusLabels[lead.customer_status] || lead.customer_status || '—'),
+  ]);
+  const body = element('p', { className: 'lead-message', text: lead.message });
+  const actions = element('div', { className: 'client-actions' });
+  if (lead.phone) {
+    // واتساب: قناة الردّ الفعلية في هذا السوق، ورقم بلا زر يعني نسخًا يدويًا.
+    actions.append(element('a', {
+      className: 'button button-primary',
+      text: 'ردّ عبر واتساب',
+      href: `https://wa.me/${lead.phone.replace(/\D/g, '')}`,
+      target: '_blank', rel: 'noopener',
+    }));
+  }
+  if (!lead.is_read) {
+    actions.append(element('button', {
+      className: 'button button-secondary', type: 'button', text: 'تعليم كمقروء',
+      onClick: async (event) => {
+        event.currentTarget.disabled = true;
+        try {
+          await api(`/api/leads/${encodeURIComponent(lead.id)}/read`, { method: 'POST' });
+          await loadLeads(true);
+          await loadDashboard(true);
+        } catch (error) { showToast(error.message, true); }
+      },
+    }));
+  }
+  return element('article', { className: `client-card${lead.is_read ? '' : ' is-unread'}` }, [header, details, body, actions]);
+}
+
+function renderLeads() {
+  const container = byId('leads-container');
+  container.replaceChildren();
+  if (!state.leads.length) {
+    return container.append(emptyState('لا عملاء محتملون بعد', 'ما وصل نموذج التواصل في athar.date يظهر هنا.'));
+  }
+  for (const lead of state.leads) container.append(leadCard(lead));
+}
+
+async function loadLeads(quiet = false) {
+  try {
+    const payload = await api('/api/leads');
+    state.leads = payload.leads || [];
+    renderLeads();
+    if (!quiet) showToast('تم تحديث العملاء المحتملين.');
+  } catch (error) { showToast(error.message, true); }
+}
+
+/** السحب اليدوي: الدورة الليلية تكفي، لكن انتظار الليل لا يكفي لمن ينتظر عميلًا. */
+async function syncLeadsNow() {
+  const trigger = byId('sync-leads-button');
+  trigger.disabled = true;
+  try {
+    const result = await api('/api/leads/sync', { method: 'POST' });
+    await loadLeads(true);
+    await loadDashboard(true);
+    showToast(result.imported
+      ? `وصل ${result.imported} عميلًا محتملًا جديدًا.`
+      : 'لا جديد منذ آخر سحب.');
+  } catch (error) { showToast(error.message, true); }
+  finally { trigger.disabled = false; }
+}
+/**
+ * دفع قائمة التجارب إلى موقع أثر.
+ *
+ * تُدفع ليلًا تلقائيًا، والزر لمن أنشأ تجربة الآن ولا يريد انتظار الليل.
+ * والدفع استبدال كامل، فتكراره بلا أثر.
+ */
+async function syncShowcaseNow() {
+  const trigger = byId('sync-showcase-button');
+  trigger.disabled = true;
+  try {
+    const result = await api('/api/showcase/sync', { method: 'POST' });
+    showToast(result.stored
+      ? `تُعرض الآن ${result.stored} تجربة في athar.date.`
+      : 'لا تجارب مؤهَّلة: التجربة تحتاج نسخة تجريبية نشطة برابط https. قسم التجارب لن يظهر في الموقع.');
+  } catch (error) { showToast(error.message, true); }
+  finally { trigger.disabled = false; }
+}
+
+/** مبالغ بعملات مختلفة تُعرض متجاورة: جمعها في رقم واحد كذب يبدو صحيحًا. */
+const moneyList = (list) => (list?.length
+  ? list.map((m) => money(m.amount_minor, m.currency)).join(' + ')
+  : '—');
+
+function renderReports() {
+  const report = state.report;
+  if (!report) return;
+
+  byId('reports-money').replaceChildren(...[
+    ['الإيراد الشهري المتكرر', moneyList(report.mrr), 'من الاشتراكات النشطة'],
+    ['المحصَّل — 12 شهرًا', moneyList(report.collected_total), 'دفعات مسجَّلة فعلًا'],
+    ['تجديدات قادمة', String(report.upcoming_renewals.length), 'خلال النافذة المحدَّدة'],
+    ['متأخرون', String(report.overdue.length), 'فات موعدهم ولم يُسجَّل دفع'],
+  ].map(([label, value, hint]) => element('div', { className: 'metric-card' }, [
+    element('small', { text: label }),
+    element('strong', { text: value }),
+    element('p', { className: 'muted', text: hint }),
+  ])));
+
+  const renewals = byId('renewals-body');
+  renewals.replaceChildren(...(report.upcoming_renewals.length
+    ? report.upcoming_renewals.map((row) => element('tr', {}, [
+        element('td', { text: row.customer_name }),
+        element('td', { text: row.display_name }),
+        element('td', { text: dateText(row.period_end) }),
+        element('td', { text: row.days_left <= 0 ? 'اليوم' : `${row.days_left} يومًا` }),
+        element('td', { text: money(row.amount_minor, row.currency) }),
+        // المفتاح يُعرض هنا لا ليُبدَّل: من يقرأ التجديدات يحتاج أن يعرف
+        // أيّها سيتوقف تلقائيًا وأيّها ينتظر قراره.
+        element('td', { text: row.auto_suspend ? 'مفعّل' : 'معطّل' }),
+      ]))
+    : [element('tr', {}, [element('td', { text: 'لا تجديدات في هذه النافذة', attrs: { colspan: '6' } })])]));
+
+  const overdue = byId('overdue-body');
+  overdue.replaceChildren(...(report.overdue.length
+    ? report.overdue.map((row) => element('tr', {}, [
+        element('td', { text: row.customer_name }),
+        element('td', { text: row.display_name }),
+        element('td', { text: statusLabels[row.status] || row.status }),
+        element('td', { text: `${row.days_late} يومًا` }),
+        element('td', { text: money(row.amount_minor, row.currency) }),
+        element('td', {}, row.phone
+          ? element('a', { className: 'text-button', text: 'واتساب', target: '_blank', rel: 'noopener',
+              href: `https://wa.me/${row.phone.replace(/\D/g, '')}` })
+          : element('span', { className: 'muted', text: '—' })),
+      ]))
+    : [element('tr', {}, [element('td', { text: 'لا متأخرين — كل الاشتراكات في موعدها', attrs: { colspan: '6' } })])]));
+
+  byId('collected-body').replaceChildren(...(report.collected_by_month.length
+    ? [...report.collected_by_month].reverse().map((row) => element('tr', {}, [
+        element('td', { text: row.month }),
+        element('td', { text: moneyList(row.totals) }),
+      ]))
+    : [element('tr', {}, [element('td', { text: 'لا دفعات مسجَّلة بعد', attrs: { colspan: '2' } })])]));
+
+  byId('by-product-body').replaceChildren(...(report.by_product.length
+    ? report.by_product.map((row) => element('tr', {}, [
+        element('td', { text: row.product_name }),
+        element('td', { text: String(row.active) }),
+        element('td', { text: money(row.mrr_minor, row.currency) }),
+      ]))
+    : [element('tr', {}, [element('td', { text: 'لا اشتراكات نشطة', attrs: { colspan: '3' } })])]));
+}
+
+const megabytes = (bytes) => `${(Number(bytes || 0) / 1048576).toFixed(1)} م.ب`;
+
+function renderLimits() {
+  const report = state.limits;
+  if (!report) return;
+
+  // التحذيرات فوق الجدول: من يفتح الصفحة يجب أن يرى المشكلة لا أن يبحث عنها.
+  byId('limits-warnings').replaceChildren(...report.warnings.map((warning) => element('p', {
+    className: warning.level === 'critical' ? 'form-error' : 'muted',
+    text: `${warning.resource}: ${warning.message}`,
+  })));
+
+  const rows = report.d1.map((row) => element('tr', {}, [
+    element('td', { text: `قاعدة ${row.name}` }),
+    element('td', { text: megabytes(row.size_bytes) }),
+    element('td', { text: `${row.used_percent}%` }),
+  ]));
+  if (report.r2) {
+    rows.push(element('tr', {}, [
+      element('td', { text: `سطل النسخ (${report.r2.objects} ملفًا)` }),
+      element('td', { text: megabytes(report.r2.size_bytes) }),
+      element('td', { text: '—' }),
+    ]));
+    for (const entry of report.r2.by_prefix) {
+      rows.push(element('tr', {}, [
+        element('td', { text: `— ${entry.prefix}` }),
+        element('td', { text: megabytes(entry.size_bytes) }),
+        element('td', { text: `${entry.objects} نسخة` }),
+      ]));
+    }
+  }
+  byId('limits-body').replaceChildren(...rows);
+}
+
+async function loadReports(quiet = false) {
+  const refresh = byId('load-reports-button');
+  refresh.disabled = true;
+  try {
+    const [revenue, limits] = await Promise.all([
+      api('/api/reports/revenue'),
+      api('/api/reports/limits'),
+    ]);
+    state.report = revenue.report;
+    state.limits = limits.report;
+    renderReports();
+    renderLimits();
+    if (!quiet) showToast('تم تحديث التقرير.');
+  } catch (error) { showToast(error.message, true); }
+  finally { refresh.disabled = false; }
+}
 function renderArchive() {
   const container = byId('archive-container');
   container.replaceChildren();
@@ -893,6 +1119,9 @@ function bindEvents() {
   // الصنف نفسه للتنسيق، وربطه هنا يعني `setView(undefined)` عند نقره.
   document.querySelectorAll('.nav-item[data-view]').forEach((item) => item.addEventListener('click', () => setView(item.dataset.view)));
   document.querySelectorAll('[data-view-jump]').forEach((item) => item.addEventListener('click', () => setView(item.dataset.viewJump)));
+  byId('sync-leads-button').addEventListener('click', syncLeadsNow);
+  byId('sync-showcase-button').addEventListener('click', syncShowcaseNow);
+  byId('load-reports-button').addEventListener('click', () => loadReports());
   ['client-search', 'product-filter', 'environment-filter', 'status-filter'].forEach((id) => byId(id).addEventListener(id === 'client-search' ? 'input' : 'change', renderClients));
   document.querySelectorAll('[data-layout]').forEach((item) => item.addEventListener('click', () => {
     state.layout = item.dataset.layout;
@@ -940,7 +1169,7 @@ function bindEvents() {
 async function boot() {
   bindEvents();
   const requested = window.location.hash.slice(1);
-  if (['overview', 'clients', 'plans', 'archive', 'audit'].includes(requested)) setView(requested);
+  if (['overview', 'clients', 'leads', 'plans', 'reports', 'archive', 'audit'].includes(requested)) setView(requested);
   try {
     const session = await api('/api/session');
     state.csrf = session.csrf;

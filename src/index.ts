@@ -432,6 +432,11 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const address = optionalText(body.address, 'العنوان', 300);
   const notes = optionalText(body.notes, 'الملاحظات', 1000);
   const adminUsername = optionalText(body.admin_username, 'اسم مستخدم المدير', 40).toLowerCase();
+  // اسم الطبيب للعيادات: التحية في لوحة العيادة تناديه به، وبدونه
+  // تناديه باسم عيادته.
+  const adminFullName = productId === 'clinic'
+    ? optionalText(body.admin_full_name, 'اسم الطبيب', 120)
+    : '';
   const schoolLogoDataUrl = productId === 'school'
     ? optionalText(body.school_logo_data_url, 'شعار المدرسة', 42000)
     : '';
@@ -455,6 +460,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     trial_expires_at: trialExpiresAt,
     // اسم مستخدم المدير اختياري: المحرك يضع افتراضه حين يُترك فارغًا.
     admin_username: adminUsername,
+    admin_full_name: adminFullName,
     config: { phone, address, currency: 'ILS', logo_data_url: schoolLogoDataUrl },
   };
   const tenantAfter = { tenantId, displayName, slug, productId, planId, environment, status: initialStatus };

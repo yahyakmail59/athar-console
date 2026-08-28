@@ -108,7 +108,10 @@ const actionLabels = {
   'tenant.provision_retried': 'إعادة إنشاء ناجحة', 'tenant.provision_retry_failed': 'فشل إعادة الإنشاء',
 };
 
-const PRODUCTS_WITH_USERNAME = new Set(['school']);
+// المنتجات التي يدخل مستخدمها باسم. الصيدلية ليست منها: تدخل برمزها ورقم
+// سري بلا اسم، فحقل الاسم لها حقل بلا أثر — والأسوأ من غيابه أن يظهر ثم
+// لا يفعل شيئًا.
+const PRODUCTS_WITH_USERNAME = new Set(['school', 'restaurant', 'clinic']);
 let createSchoolLogoDataUrl = '';
 
 // وصف كل هوية للعرض وحده عند الاختيار؛ القيم الفعلية (الألوان والخطوط) لا
@@ -371,6 +374,11 @@ function updateCreateOptions() {
   document.querySelectorAll('.username-only').forEach((field) => {
     field.hidden = !PRODUCTS_WITH_USERNAME.has(productId);
   });
+  // اسم الطبيب يظهر للعيادات وحدها: التحية في لوحة العيادة تناديه باسمه،
+  // وبلا هذا الحقل تناديه باسم عيادته.
+  document.querySelectorAll('.clinic-only').forEach((field) => {
+    field.hidden = productId !== 'clinic';
+  });
   byId('school-logo-field').hidden = productId !== 'school';
   // حزمة الهوية: محرك المطاعم يقرؤها فعلًا الآن ويطبّقها عند الإنشاء، فتظهر
   // لهذا المنتج وحده — حقل بلا أثر لبقية المنتجات لا يزال يُخفى.
@@ -514,6 +522,9 @@ async function submitCreate(event) {
   else delete data.school_logo_data_url;
   if (data.environment !== 'demo') delete data.trial_expires_at;
   if (!String(data.admin_username || '').trim()) delete data.admin_username;
+  if (data.product_id !== 'clinic' || !String(data.admin_full_name || '').trim()) {
+    delete data.admin_full_name;
+  }
   submit.disabled = true;
   byId('create-error').textContent = '';
   try {

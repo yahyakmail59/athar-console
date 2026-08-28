@@ -15,7 +15,7 @@
        بمعنيين يُربكان، وخلط الإيموجي بالمحارف يجعل الشريط يبدو مجموعًا لا
        مصمَّمًا. وهي مضمّنة لا مجلوبة: `default-src 'self'` في `_headers`،
        ولا يُضعَّف حدّ أمني لأجل أيقونة. -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <svg width="0" height="0" class="icon-sprite" aria-hidden="true" focusable="false">
     <symbol id="i-overview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3.5 10.5 12 4l8.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4v-6h-6v6H5A1.5 1.5 0 0 1 3.5 19z"/>
     </symbol>
@@ -179,23 +179,27 @@
         </div>
         <div id="reports-money" class="metrics-grid"></div>
         <div class="panel table-panel">
-          <div class="section-heading" style="padding:18px 20px 0"><div><h3>تجديدات الثلاثين يومًا القادمة</h3></div></div>
+          <div class="section-heading panel-heading"><div><h3>تجديدات الثلاثين يومًا القادمة</h3></div></div>
           <div class="table-scroll"><table><thead><tr><th>العميل</th><th>المساحة</th><th>ينتهي في</th><th>باقٍ</th><th>المبلغ</th><th>إيقاف تلقائي</th></tr></thead><tbody id="renewals-body"></tbody></table></div>
         </div>
         <div class="panel table-panel">
-          <div class="section-heading" style="padding:18px 20px 0"><div><h3>المتأخرون</h3></div></div>
+          <div class="section-heading panel-heading"><div><h3>المتأخرون</h3></div></div>
           <div class="table-scroll"><table><thead><tr><th>العميل</th><th>المساحة</th><th>الحالة</th><th>متأخر منذ</th><th>المبلغ</th><th>تواصل</th></tr></thead><tbody id="overdue-body"></tbody></table></div>
         </div>
         <div class="panel table-panel">
-          <div class="section-heading" style="padding:18px 20px 0"><div><h3>المحصَّل شهريًا — آخر اثني عشر شهرًا</h3></div></div>
+          <div class="section-heading panel-heading"><div><h3>المحصَّل شهريًا — آخر اثني عشر شهرًا</h3></div></div>
+          <!-- الرسم قبل الجدول: اثنا عشر رقمًا في عمود لا تُري اتجاهًا، والاتجاه
+               هو ما يُقرأ من تقرير شهري — أصاعدٌ أم هابط. والجدول يبقى تحته
+               لمن يريد الرقم بعينه. -->
+          <div id="collected-chart" class="chart"></div>
           <div class="table-scroll"><table><thead><tr><th>الشهر</th><th>المحصَّل</th></tr></thead><tbody id="collected-body"></tbody></table></div>
         </div>
         <div class="panel table-panel">
-          <div class="section-heading" style="padding:18px 20px 0"><div><h3>الإيراد المتكرر حسب المنتج</h3></div></div>
+          <div class="section-heading panel-heading"><div><h3>الإيراد المتكرر حسب المنتج</h3></div></div>
           <div class="table-scroll"><table><thead><tr><th>المنتج</th><th>مساحات نشطة</th><th>إيراد شهري</th></tr></thead><tbody id="by-product-body"></tbody></table></div>
         </div>
         <div class="panel table-panel">
-          <div class="section-heading" style="padding:18px 20px 0"><div><h3>حدود المنصة</h3><p class="muted">تُقاس ليليًا بعد النسخ الاحتياطي. عدد الطلبات وزمن المعالج يُقرآن من لوحة كلاودفلير — قراءتهما من هنا تحتاج رمزًا واسع الصلاحية.</p></div></div>
+          <div class="section-heading panel-heading"><div><h3>حدود المنصة</h3><p class="muted">تُقاس ليليًا بعد النسخ الاحتياطي. عدد الطلبات وزمن المعالج يُقرآن من لوحة كلاودفلير — قراءتهما من هنا تحتاج رمزًا واسع الصلاحية.</p></div></div>
           <div id="limits-warnings"></div>
           <div class="table-scroll"><table><thead><tr><th>المورد</th><th>المستخدَم</th><th>من الحد</th></tr></thead><tbody id="limits-body"></tbody></table></div>
         </div>

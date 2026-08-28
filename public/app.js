@@ -213,7 +213,10 @@ function clientActions(tenant) {
   }
   if (tenant.status === 'active') actions.append(button('إيقاف', 'button-danger', 'suspend', tenant.id));
   if (tenant.status === 'suspended') actions.append(button('استئناف', 'button-secondary', 'resume', tenant.id));
-  if (tenant.status === 'failed' && tenant.product_id === 'pharmacy') actions.append(button('إعادة الإنشاء', 'button-secondary', 'retry', tenant.id));
+  // لكل منتج مربوط لا للصيدليات وحدها: الخادم يقبل الإعادة لأي محرك، وكان
+  // القيد في الواجهة فقط — فمدرسة أو عيادة يفشل إنشاؤها تبقى «فاشلة» بلا
+  // زرّ يعيد المحاولة، ولا سبيل إلا حذفها وإنشاؤها من جديد.
+  if (tenant.status === 'failed') actions.append(button('إعادة الإنشاء', 'button-secondary', 'retry', tenant.id));
   actions.append(button('أرشفة', 'button-quiet', 'archive', tenant.id));
   return actions;
 }
@@ -309,7 +312,7 @@ function renderClientTable(tenants) {
       button('دفعة', 'button-primary', 'payment', tenant.id), button('الباقة', 'button-secondary', 'plan', tenant.id),
       button('⋯', 'button-quiet', 'history', tenant.id),
     ]);
-    if (tenant.status === 'failed' && tenant.product_id === 'pharmacy') {
+    if (tenant.status === 'failed') {
       actions.prepend(button('إعادة', 'button-secondary', 'retry', tenant.id));
     }
     tbody.append(element('tr', {}, [
@@ -711,7 +714,7 @@ async function lifecycle(tenant, action) {
 async function retryProvision(tenant) {
   const agreed = await confirmAction({
     title: `إعادة الإنشاء: ${tenant.display_name}`,
-    message: 'يُعاد إنشاء المساحة داخل محرك الصيدليات، وتصدر بيانات دخول جديدة.',
+    message: `يُعاد إنشاء المساحة داخل محرك ${tenant.product_name}، وتصدر بيانات دخول جديدة.`,
     okLabel: 'إعادة الإنشاء',
   });
   if (!agreed) return;
@@ -720,7 +723,7 @@ async function retryProvision(tenant) {
       method: 'POST', body: '{}',
     });
     showProvisionedCredentials(payload);
-    showToast('نجحت إعادة إنشاء الصيدلية وربطها بلوحة أثر.');
+    showToast('نجحت إعادة الإنشاء والربط بلوحة أثر.');
     await loadDashboard(true);
   } catch (error) { showToast(error.message, true); }
 }
@@ -1014,6 +1017,62 @@ function renderReports() {
       ]))
     : [element('tr', {}, [element('td', { text: 'لا متأخرين — كل الاشتراكات في موعدها', attrs: { colspan: '6' } })])]));
 
+/**
+ * رسم أعمدة للمحصَّل الشهري.
+ *
+ * بلا مكتبة: `default-src 'self'` في `_headers`، ولا يُضعَّف حدّ أمني لأجل
+ * رسم. واثنا عشر عمودًا لا تحتاج مكتبة أصلًا.
+ *
+ * وعملة واحدة فقط تُرسم — الأولى في أول شهر فيه دفعات. جمع عملتين في عمود
+ * واحد يعطي رقمًا لا معنى له، ورسمُ عملة ثانية بمقياسها هي يجعل عمودًا
+ * أقصر يبدو أكبر.
+ */
+function renderCollectedChart(months) {
+  const box = byId('collected-chart');
+  box.replaceChildren();
+  const currency = months.flatMap((row) => row.totals).find((total) => total.amount_minor > 0)?.currency;
+  if (!currency) {
+    box.append(element('p', { className: 'muted chart-empty', text: 'لا دفعات مسجَّلة بعد.' }));
+    return;
+  }
+
+  const points = months.map((row) => ({
+    month: row.month,
+    value: Number(row.totals.find((total) => total.currency === currency)?.amount_minor || 0),
+  }));
+  const peak = Math.max(...points.map((point) => point.value), 1);
+
+  const chart = element('div', { className: 'chart-bars' });
+  for (const point of points) {
+    // نسبة من صفر إلى واحد، بحدٍّ أدنى يُبقي شهرًا بلا دخل خطًّا مرئيًّا
+    // بدل فراغ يبدو عطلًا.
+    const ratio = Math.max(0.015, point.value / peak);
+    // الطول يُضبَط من الشيفرة لا بسمة `style`.
+    //
+    // `style-src 'self'` في `_headers` **يُلغي كل سمة style مضمّنة** بلا
+    // رسالة: السمة تبقى في الوسم ولا تُطبَّق. فظلّت الأعمدة كاملة الطول
+    // ولا يظهر خطأ يدلّ. والضبط عبر `element.style` ليس سمةً فلا يمسّه
+    // المنع — وهو الطريق الوحيد المسموح هنا.
+    //
+    // و`scaleY` لا نسبة مئوية: النسبة تحتاج ارتفاعًا معلومًا وقت الحساب،
+    // وارتفاع الحاوية يأتي من التخطيط المرن فيُحسَب متأخّرًا.
+    const fill = element('span', { className: 'chart-fill' });
+    fill.style.transform = `scaleY(${ratio.toFixed(4)})`;
+    fill.title = `${point.month}: ${money(point.value, currency)}`;
+    const bar = element('div', { className: 'chart-bar' }, [
+      element('div', { className: 'chart-track' }, fill),
+      element('small', { text: point.month.slice(5) }),
+    ]);
+    if (point.value === peak) bar.classList.add('is-peak');
+    chart.append(bar);
+  }
+  box.append(chart, element('p', {
+    className: 'chart-note muted',
+    text: `الأعمدة بـ${currency} — أعلى شهر ${money(peak, currency)}`,
+  }));
+}
+
+  renderCollectedChart(report.collected_by_month);
   byId('collected-body').replaceChildren(...(report.collected_by_month.length
     ? [...report.collected_by_month].reverse().map((row) => element('tr', {}, [
         element('td', { text: row.month }),

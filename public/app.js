@@ -36,6 +36,42 @@ function showToast(message, error = false) {
   window.setTimeout(() => toast.remove(), 4200);
 }
 
+/**
+ * تأكيد بنافذة اللوحة نفسها لا بنافذة النظام.
+ *
+ * `window.confirm` تُوقف الصفحة، ولا تتبع اتجاهها ولا خطّها، وتظهر باسم
+ * المضيف فوقها — فتبدو وسط لوحة مصمَّمة كأنها عطل لا حماية. وهي أيضًا
+ * تختلف شكلًا بين متصفّح وآخر، فما يراه صاحب اللوحة ليس ما نصمّمه.
+ */
+function confirmAction({ title, message, okLabel = 'تأكيد', danger = false }) {
+  return new Promise((resolve) => {
+    const dialog = byId('confirm-dialog');
+    byId('confirm-title').textContent = title;
+    byId('confirm-message').textContent = message;
+    const ok = byId('confirm-ok');
+    ok.textContent = okLabel;
+    ok.className = `button ${danger ? 'button-danger' : 'button-primary'}`;
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      dialog.removeEventListener('close', onClose);
+      ok.removeEventListener('click', onOk);
+      byId('confirm-cancel').removeEventListener('click', onCancel);
+      dialog.close();
+      resolve(value);
+    };
+    // الإغلاق بمفتاح الهروب أو بزرّ × يعني «لا»: صمتٌ لا يُقرأ موافقةً.
+    function onClose() { finish(false); }
+    function onOk() { finish(true); }
+    function onCancel() { finish(false); }
+    dialog.addEventListener('close', onClose);
+    ok.addEventListener('click', onOk);
+    byId('confirm-cancel').addEventListener('click', onCancel);
+    dialog.showModal();
+  });
+}
+
 async function api(path, options = {}) {
   const method = options.method || 'GET';
   const headers = new Headers(options.headers || {});
@@ -232,16 +268,28 @@ function detail(label, value) {
   return element('div', {}, [element('small', { text: label }), element('strong', { text: value || '—', title: value || '' })]);
 }
 
+/**
+ * شاشة «العملاء» للنسخ الحقيقية وحدها.
+ *
+ * النسخة التجريبية ليست عميلًا بعد — هي عرضٌ قيد التجربة. وخلطُ الاثنين في
+ * قائمة واحدة يجعل «كم عميلًا عندي؟» سؤالًا بلا جواب: العدد يشمل من لم
+ * يدفع. التجريبية تظهر مع المحتملين، وتنتقل إلى هنا حين تصير حقيقية.
+ */
 function filteredTenants() {
   const query = byId('client-search').value.trim().toLowerCase();
   const product = byId('product-filter').value;
-  const environment = byId('environment-filter').value;
   const status = byId('status-filter').value;
   return (state.dashboard?.tenants || []).filter((tenant) => {
+    if (tenant.environment !== 'production') return false;
     const haystack = [tenant.display_name, tenant.slug, tenant.phone, tenant.email, tenant.product_name].join(' ').toLowerCase();
     return (!query || haystack.includes(query)) && (!product || tenant.product_id === product) &&
-      (!environment || tenant.environment === environment) && (!status || tenant.status === status);
+      (!status || tenant.status === status);
   });
+}
+
+/** النسخ التجريبية: عروضٌ قيد التجربة، تُعرض مع المحتملين لا مع العملاء. */
+function demoTenants() {
+  return (state.dashboard?.tenants || []).filter((tenant) => tenant.environment === 'demo');
 }
 
 function renderClientTable(tenants) {
@@ -269,10 +317,17 @@ function renderClientTable(tenants) {
 
 function renderClients() {
   const tenants = filteredTenants();
-  byId('client-count').textContent = `${tenants.length} من ${state.dashboard?.tenants.length || 0} عميل`;
+  const production = (state.dashboard?.tenants || []).filter((t) => t.environment === 'production').length;
+  byId('client-count').textContent = `${tenants.length} من ${production} عميل حقيقي`;
   const container = byId('clients-container');
   container.replaceChildren();
-  if (!tenants.length) return container.append(emptyState('لا توجد نتائج', 'غيّر البحث أو عوامل التصفية، أو أنشئ عميلًا جديدًا.', !state.dashboard?.tenants.length));
+  if (!tenants.length) {
+    const demos = demoTenants().length;
+    return container.append(emptyState('لا عملاء حقيقيون هنا',
+      demos ? `عندك ${demos} نسخة تجريبية في «العملاء المحتملون». حوّل النسخة إلى حقيقية حين يدفع صاحبها.`
+        : 'غيّر البحث أو عوامل التصفية، أو أنشئ عميلًا جديدًا.',
+      !state.dashboard?.tenants.length));
+  }
   if (state.layout === 'table') return container.append(renderClientTable(tenants));
   for (const tenant of tenants) container.append(clientCard(tenant));
 }
@@ -281,6 +336,9 @@ function renderClients() {
 function renderLeadsBadge() {
   const badge = byId('leads-badge');
   const count = Number(state.dashboard?.unreadLeads || 0);
+  // الشارة للرسائل غير المقروءة وحدها: التجريبية معروفة لصاحبها لأنه أنشأها،
+  // ورقمٌ يشملها يجعل الشارة دائمة فتُهمَل.
+
   badge.textContent = count > 99 ? '99+' : String(count);
   badge.hidden = count === 0;
 }
@@ -288,9 +346,9 @@ function renderLeadsBadge() {
 function renderMetrics() {
   const metrics = state.dashboard.metrics || {};
   const cards = [
-    ['إجمالي العملاء', Number(metrics.total || 0).toLocaleString('ar'), 'كل المساحات غير المؤرشفة'],
-    ['العملاء النشطون', Number(metrics.active || 0).toLocaleString('ar'), 'تعمل حاليًا'],
-    ['النسخ التجريبية', Number(metrics.demos || 0).toLocaleString('ar'), 'عروض للعملاء'],
+    ['العملاء الحقيقيون', Number(metrics.real_total || 0).toLocaleString('ar'), 'نسخ مدفوعة غير مؤرشفة'],
+    ['منهم يعمل الآن', Number(metrics.real_active || 0).toLocaleString('ar'), 'غير موقوف ولا مسودة'],
+    ['نسخ تجريبية', Number(metrics.demos || 0).toLocaleString('ar'), 'احتمالات بيع لم تُغلَق'],
     ['دفعات تحتاج متابعة', Number(metrics.due || 0).toLocaleString('ar'), 'متأخرة أو في المهلة'],
     ['الإيراد الشهري', money(metrics.monthly_minor || 0, 'USD'), 'تقدير الاشتراكات النشطة'],
   ];
@@ -435,7 +493,9 @@ function setView(view) {
   byId('page-kicker').textContent = titles[view][0];
   byId('page-title').textContent = titles[view][1];
   document.body.classList.remove('sidebar-open');
-  window.location.hash = view;
+  // رابط نظيف بلا `#`: المسار في العنوان نفسه، فيُنسخ ويُرسل ويُفتح مباشرة.
+  const path = view === 'overview' ? '/' : `/${view}`;
+  if (window.location.pathname !== path) window.history.pushState(null, '', path);
   if (view === 'archive') void loadArchive(true);
   if (view === 'leads') void loadLeads(true);
   if (view === 'reports') void loadReports(true);
@@ -622,7 +682,13 @@ async function showHistory(tenant) {
 async function lifecycle(tenant, action) {
   const labels = { suspend: 'إيقاف', resume: 'استئناف', archive: 'أرشفة' };
   const extra = action === 'archive' ? ' سيختفي من القائمة ويلغى اشتراكه، مع بقاء السجل في قاعدة البيانات.' : '';
-  if (!window.confirm(`هل تريد ${labels[action]} «${tenant.display_name}»؟${extra}`)) return;
+  const agreed = await confirmAction({
+    title: `${labels[action]}: ${tenant.display_name}`,
+    message: `هل تريد ${labels[action]} هذا العميل؟${extra}`,
+    okLabel: labels[action],
+    danger: action !== 'resume',
+  });
+  if (!agreed) return;
   try {
     const payload = await api(`/api/tenants/${encodeURIComponent(tenant.id)}/lifecycle`, { method: 'POST', body: JSON.stringify({ action }) });
     if (payload.engine_missing) {
@@ -635,7 +701,12 @@ async function lifecycle(tenant, action) {
 }
 
 async function retryProvision(tenant) {
-  if (!window.confirm(`إعادة محاولة إنشاء «${tenant.display_name}» داخل محرك الصيدليات؟`)) return;
+  const agreed = await confirmAction({
+    title: `إعادة الإنشاء: ${tenant.display_name}`,
+    message: 'يُعاد إنشاء المساحة داخل محرك الصيدليات، وتصدر بيانات دخول جديدة.',
+    okLabel: 'إعادة الإنشاء',
+  });
+  if (!agreed) return;
   try {
     const payload = await api(`/api/tenants/${encodeURIComponent(tenant.id)}/retry-provision`, {
       method: 'POST', body: '{}',
@@ -672,11 +743,16 @@ async function handleClientAction(event) {
  */
 async function toggleAutoSuspend(tenant) {
   const enabling = !Number(tenant.auto_suspend);
-  if (enabling && !window.confirm(
-    `تفعيل الإيقاف التلقائي لـ«${tenant.display_name}»؟\n\n`
-    + 'عند انتهاء فترة الاشتراك تُفتح مهلة 3 أيام تعمل فيها الخدمة كالمعتاد، '
-    + 'ثم تتوقف تلقائيًا حتى تسجيل الدفعة.',
-  )) return;
+  if (enabling) {
+    const agreed = await confirmAction({
+      title: `تفعيل الإيقاف التلقائي: ${tenant.display_name}`,
+      message: 'عند انتهاء فترة الاشتراك تُفتح مهلة ثلاثة أيام تعمل فيها الخدمة كالمعتاد، '
+        + 'ثم تتوقف تلقائيًا حتى تسجيل الدفعة.',
+      okLabel: 'تفعيل',
+      danger: true,
+    });
+    if (!agreed) return;
+  }
   try {
     await api(`/api/tenants/${encodeURIComponent(tenant.id)}/auto-suspend`, {
       method: 'POST', body: JSON.stringify({ enabled: enabling }),
@@ -729,12 +805,14 @@ async function submitCustomer(event) {
 }
 
 async function resetOwnerPin(tenant) {
-  const warning = `إصدار رقم سري جديد لـ«${tenant.display_name}»؟\n\n`
-    + '• الرقم الحالي يتوقف فورًا.\n'
-    + '• كل الأجهزة المسجّلة ستُخرج وتحتاج الدخول من جديد.\n'
-    + '• المخزون والفواتير لا تتأثر.\n'
-    + '• الرقم الجديد يظهر مرة واحدة فقط.';
-  if (!window.confirm(warning)) return;
+  const agreed = await confirmAction({
+    title: `رقم سري جديد: ${tenant.display_name}`,
+    message: 'الرقم الحالي يتوقف فورًا، وكل الأجهزة المسجّلة تُخرَج وتحتاج الدخول من جديد. '
+      + 'المخزون والفواتير لا تتأثر. والرقم الجديد يظهر مرة واحدة فقط.',
+    okLabel: 'إصدار رقم جديد',
+    danger: true,
+  });
+  if (!agreed) return;
   try {
     const payload = await api(`/api/tenants/${encodeURIComponent(tenant.id)}/reset-pin`, { method: 'POST', body: '{}' });
     showProvisionedCredentials(payload);
@@ -819,12 +897,22 @@ function leadCard(lead) {
   return element('article', { className: `client-card${lead.is_read ? '' : ' is-unread'}` }, [header, details, body, actions]);
 }
 
+/**
+ * المحتملون: من يجرّب ومن يسأل.
+ *
+ * النسخة التجريبية والرسالة الواردة شيء واحد تجاريًا — كلاهما احتمال بيع لم
+ * يُغلَق. وفصلهما في شاشتين كان يجعل صاحب اللوحة يتابع نصف خطّ البيع في
+ * مكان ونصفه في آخر.
+ */
 function renderLeads() {
   const container = byId('leads-container');
   container.replaceChildren();
-  if (!state.leads.length) {
-    return container.append(emptyState('لا عملاء محتملون بعد', 'ما وصل نموذج التواصل في athar.date يظهر هنا.'));
+  const demos = demoTenants();
+  if (!demos.length && !state.leads.length) {
+    return container.append(emptyState('لا عملاء محتملون بعد',
+      'النسخ التجريبية التي تنشئها، وما يصل نموذج التواصل في athar.date، يظهران هنا.'));
   }
+  for (const tenant of demos) container.append(clientCard(tenant));
   for (const lead of state.leads) container.append(leadCard(lead));
 }
 
@@ -1028,22 +1116,31 @@ function openPurgeDialog(tenant) {
   form.elements.tenant_id.value = tenant.id;
   byId('purge-title').textContent = `حذف: ${tenant.display_name}`;
   byId('purge-slug').textContent = tenant.slug;
-  byId('purge-export-state').textContent = 'لم تُنزّل نسخة بعد.';
+  byId('purge-export-state').textContent = 'جارٍ تنزيل النسخة الاحتياطية…';
   byId('purge-submit').disabled = true;
   byId('purge-error').textContent = '';
   byId('purge-dialog').showModal();
+  void purgeExport();
 }
 
+/**
+ * النسخة الاحتياطية تُنزَّل تلقائيًا عند فتح النافذة.
+ *
+ * الخادم يرفض الحذف بلا بصمة نسخة مطابقة — وهذه الحماية تبقى كما هي. لكن
+ * جعلها **خطوة يدوية** كان يحوّل حمايةً إلى عبء: زرٌّ يُضغط وانتظارٌ ثم
+ * خطوة ثانية. الحماية نفسها تتحقّق إن نزّلها البرنامج بنفسه، وما يبقى على
+ * صاحب اللوحة هو الفعل الواعي وحده: كتابة المعرّف.
+ */
 async function purgeExport() {
-  const trigger = byId('purge-export-button');
-  trigger.disabled = true;
   byId('purge-error').textContent = '';
   try {
     state.purge.checksum = await exportTenant(state.purge.tenant);
-    byId('purge-export-state').textContent = 'تم تنزيل النسخة الاحتياطية. يمكنك المتابعة.';
+    byId('purge-export-state').textContent = 'نُزّلت نسخة احتياطية كاملة على جهازك.';
     byId('purge-submit').disabled = false;
-  } catch (error) { byId('purge-error').textContent = error.message; }
-  finally { trigger.disabled = false; }
+  } catch (error) {
+    byId('purge-export-state').textContent = 'تعذّر تنزيل النسخة — الحذف موقوف.';
+    byId('purge-error').textContent = error.message;
+  }
 }
 
 async function submitPurge(event) {
@@ -1056,7 +1153,6 @@ async function submitPurge(event) {
     byId('purge-error').textContent = 'المعرّف غير مطابق.';
     return;
   }
-  if (!window.confirm(`تأكيد أخير: حذف «${tenant.display_name}» نهائيًا مع كل بيانات مساحته؟ لا يمكن التراجع.`)) return;
   submit.disabled = true;
   byId('purge-error').textContent = '';
   try {
@@ -1086,7 +1182,12 @@ async function handleArchiveAction(event) {
     } else if (action === 'purge') {
       openPurgeDialog(tenant);
     } else if (action === 'restore') {
-      if (!window.confirm(`استعادة «${tenant.display_name}» من الأرشيف؟ سيعود موقوفًا حتى تستأنفه.`)) return;
+      const agreed = await confirmAction({
+        title: `استعادة: ${tenant.display_name}`,
+        message: 'يعود العميل موقوفًا حتى تستأنفه — لا نشطًا مباشرة.',
+        okLabel: 'استعادة',
+      });
+      if (!agreed) return;
       await api(`/api/tenants/${encodeURIComponent(tenant.id)}/lifecycle`, { method: 'POST', body: JSON.stringify({ action: 'restore' }) });
       showToast('تمت الاستعادة. العميل الآن موقوف.');
       await Promise.all([loadArchive(true), loadDashboard(true)]);
@@ -1133,7 +1234,7 @@ function bindEvents() {
   byId('sync-leads-button').addEventListener('click', syncLeadsNow);
   byId('sync-showcase-button').addEventListener('click', syncShowcaseNow);
   byId('load-reports-button').addEventListener('click', () => loadReports());
-  ['client-search', 'product-filter', 'environment-filter', 'status-filter'].forEach((id) => byId(id).addEventListener(id === 'client-search' ? 'input' : 'change', renderClients));
+  ['client-search', 'product-filter', 'status-filter'].forEach((id) => byId(id).addEventListener(id === 'client-search' ? 'input' : 'change', renderClients));
   document.querySelectorAll('[data-layout]').forEach((item) => item.addEventListener('click', () => {
     state.layout = item.dataset.layout;
     document.querySelectorAll('[data-layout]').forEach((node) => node.classList.toggle('is-active', node === item));
@@ -1171,7 +1272,6 @@ function bindEvents() {
   byId('customer-form').addEventListener('submit', submitCustomer);
   byId('archive-container').addEventListener('click', handleArchiveAction);
   byId('load-archive-button').addEventListener('click', () => loadArchive());
-  byId('purge-export-button').addEventListener('click', purgeExport);
   byId('purge-form').addEventListener('submit', submitPurge);
   byId('load-audit-button').addEventListener('click', loadFullAudit);
   document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
@@ -1179,8 +1279,13 @@ function bindEvents() {
 
 async function boot() {
   bindEvents();
-  const requested = window.location.hash.slice(1);
+  const requested = window.location.pathname.replace(/^\/+/, '');
   if (['overview', 'clients', 'leads', 'plans', 'reports', 'archive', 'audit'].includes(requested)) setView(requested);
+  // زرّا الرجوع والتقدّم في المتصفّح: بلا هذا يبقى العنوان يتغيّر والشاشة لا.
+  window.addEventListener('popstate', () => {
+    const back = window.location.pathname.replace(/^\/+/, '') || 'overview';
+    if (['overview', 'clients', 'leads', 'plans', 'reports', 'archive', 'audit'].includes(back)) setView(back);
+  });
   try {
     const session = await api('/api/session');
     state.csrf = session.csrf;

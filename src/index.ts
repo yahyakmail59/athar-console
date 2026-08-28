@@ -361,6 +361,11 @@ async function dashboard(env: Env): Promise<Response> {
          SUM(CASE WHEN t.status = 'active' THEN 1 ELSE 0 END) AS active,
          SUM(CASE WHEN t.status = 'draft' THEN 1 ELSE 0 END) AS draft,
          SUM(CASE WHEN t.environment = 'demo' AND t.status <> 'archived' THEN 1 ELSE 0 END) AS demos,
+         -- النسخة الحقيقية هي العميل، والتجريبية احتمال بيع. عدٌّ واحد
+         -- يجمعهما يجعل «كم عميلًا عندي؟» بلا جواب، و«كم منهم يعمل؟» رقمًا
+         -- أكبر من عدد العملاء نفسه — وهو ما كانت تعرضه اللوحة.
+         SUM(CASE WHEN t.environment = 'production' THEN 1 ELSE 0 END) AS real_total,
+         SUM(CASE WHEN t.environment = 'production' AND t.status = 'active' THEN 1 ELSE 0 END) AS real_active,
          SUM(CASE WHEN s.status IN ('past_due', 'grace') THEN 1 ELSE 0 END) AS due,
          SUM(CASE
                WHEN t.status = 'active' AND s.status = 'active' AND s.billing_cycle = 'monthly' THEN s.price_minor
@@ -381,7 +386,7 @@ async function dashboard(env: Env): Promise<Response> {
     today: new Date().toISOString().slice(0, 10),
     catalog,
     tenants: tenantResult.results || [],
-    metrics: metrics || { total: 0, active: 0, draft: 0, demos: 0, due: 0, monthly_minor: 0 },
+    metrics: metrics || { total: 0, active: 0, draft: 0, demos: 0, real_total: 0, real_active: 0, due: 0, monthly_minor: 0 },
     recentAudit: auditResult.results || [],
     unreadLeads,
   });
@@ -1478,7 +1483,18 @@ export default {
         }
         return response;
       }
-      return await env.ASSETS.fetch(request);
+      // تطبيق صفحة واحدة بروابط نظيفة: `/clients` و`/reports` مسارات حقيقية
+      // لا أجزاء بعد `#`. لا ملف لها في الأصول فتردّ الطبقة 404، وتُخدَم
+      // صفحة اللوحة بدلها ليقرأ المُوجّه المسار عند الإقلاع.
+      //
+      // الشرط على النقطة لا على قائمة مسارات: قائمةٌ تُنسى حين تُضاف شاشة،
+      // فيصير رابطها 404 صامتًا. وما فيه امتداد ملفٌ مفقود فعلًا ويبقى 404
+      // يكشفه — لا صفحةً بيضاء تُخفيه.
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status === 404 && !url.pathname.slice(1).includes('.')) {
+        return await env.ASSETS.fetch(new Request(new URL('/', url), request));
+      }
+      return assetResponse;
     } catch (error: unknown) {
       if (error instanceof HttpError) {
         return jsonResponse({ error: error.message, code: error.code }, error.status);

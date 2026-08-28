@@ -28,7 +28,7 @@
 
   <div id="app-view" class="app-shell" hidden>
     <aside class="sidebar">
-      <a class="sidebar-brand" href="#overview" aria-label="لوحة أثر الرئيسية">
+      <a class="sidebar-brand" href="/" aria-label="لوحة أثر الرئيسية">
         <span class="brand-mark brand-mark-small" aria-hidden="true">أ</span>
         <span><strong>أثر ميديا</strong><small>مركز التشغيل</small></span>
       </a>
@@ -68,9 +68,8 @@
       <section id="overview-view" class="page-view">
         <div class="stage-banner">
           <div>
-            <span class="stage-pill">الخطوة 1</span>
-            <strong>سجل الإدارة المركزي جاهز للعمل المحلي</strong>
-            <p>محرك الصيدليات مربوط الآن تلقائيًا. بقية المنتجات ستُربط تباعًا ضمن المراحل التالية.</p>
+            <strong>المنتجات الأربعة مربوطة بالمحرّكات</strong>
+            <p>المطاعم والمدارس والصيدليات والعيادات تُنشأ وتُوقَف وتُستأنف من هنا مباشرة.</p>
           </div>
           <button class="button button-light" data-open-create type="button">إضافة أول عميل</button>
         </div>
@@ -85,16 +84,13 @@
       </section>
 
       <section id="clients-view" class="page-view" hidden>
-        <div class="toolbar panel">
+        <div class="toolbar panel toolbar-clients">
           <div class="search-field">
             <label class="sr-only" for="client-search">البحث عن عميل</label>
             <span aria-hidden="true">⌕</span>
             <input id="client-search" type="search" placeholder="ابحث بالاسم أو المعرّف أو الهاتف">
           </div>
           <select id="product-filter" aria-label="تصفية حسب المنتج"><option value="">كل المنتجات</option></select>
-          <select id="environment-filter" aria-label="تصفية حسب نوع النسخة">
-            <option value="">تجريبية وحقيقية</option><option value="demo">تجريبية</option><option value="production">حقيقية</option>
-          </select>
           <select id="status-filter" aria-label="تصفية حسب الحالة">
             <option value="">كل الحالات</option><option value="draft">مسودة</option><option value="active">نشط</option><option value="suspended">موقوف</option>
           </select>
@@ -112,7 +108,6 @@
 
       <section id="plans-view" class="page-view" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">الكتالوج التجاري</p><h2>الباقات والأسعار</h2></div>
           <p class="muted">الأسعار تُحفظ بأصغر وحدة للعملة لتجنب أخطاء الحساب.</p>
         </div>
         <div id="plans-container" class="plans-grid"></div>
@@ -120,7 +115,6 @@
 
       <section id="leads-view" class="page-view" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">من نموذج التواصل</p><h2>العملاء المحتملون</h2></div>
           <button id="sync-leads-button" class="button button-secondary" type="button">سحب الجديد الآن</button>
         </div>
         <p class="muted">تصل من نموذج التواصل في athar.date، وتُسحب تلقائيًا كل ليلة. كل رسالة تُنشئ عميلًا بحالة «محتمل» أو تُربط بعميل قائم بالرقم نفسه.</p>
@@ -129,7 +123,6 @@
 
       <section id="reports-view" class="page-view" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">المال والتجديدات</p><h2>التقارير</h2></div>
           <button id="load-reports-button" class="button button-secondary" type="button">تحديث التقرير</button>
         </div>
         <div id="reports-money" class="metrics-grid"></div>
@@ -158,16 +151,14 @@
 
       <section id="archive-view" class="page-view" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">العملاء المؤرشفون</p><h2>الأرشيف</h2></div>
           <button id="load-archive-button" class="button button-secondary" type="button">تحديث الأرشيف</button>
         </div>
-        <p class="muted">الأرشفة لا تحذف البيانات. الحذف النهائي يتطلب تنزيل نسخة احتياطية وتأكيد المعرّف، ولا يمكن التراجع عنه.</p>
+        <p class="muted">الأرشفة لا تحذف البيانات. والحذف النهائي يُنزّل نسخة احتياطية تلقائيًا ثم يطلب كتابة المعرّف — ولا يمكن التراجع عنه.</p>
         <div id="archive-container" class="client-grid"></div>
       </section>
 
       <section id="audit-view" class="page-view" hidden>
         <div class="section-heading">
-          <div><p class="eyebrow">شفافية وأمان</p><h2>سجل العمليات</h2></div>
           <button id="load-audit-button" class="button button-secondary" type="button">تحديث السجل</button>
         </div>
         <div class="panel table-panel">
@@ -261,24 +252,29 @@
     </form>
   </dialog>
 
+  <!-- تأكيد واحد لكل الأفعال: نافذة النظام الخام وسط لوحة مصمَّمة تبدو
+       عطلًا لا حماية، ولا تُقرأ بالعربية ولا تتبع اتجاه الصفحة. -->
+  <dialog id="confirm-dialog" class="modal modal-small">
+    <div class="modal-header">
+      <h2 id="confirm-title">تأكيد</h2>
+      <button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button>
+    </div>
+    <p id="confirm-message" class="muted"></p>
+    <div class="modal-actions">
+      <button id="confirm-cancel" class="button button-quiet" type="button">إلغاء</button>
+      <button id="confirm-ok" class="button button-primary" type="button">تأكيد</button>
+    </div>
+  </dialog>
+
   <dialog id="purge-dialog" class="modal modal-small">
     <form id="purge-form" method="dialog">
       <div class="modal-header"><div><p class="eyebrow">إجراء لا يمكن التراجع عنه</p><h2 id="purge-title">حذف نهائي</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="إغلاق">×</button></div>
       <p class="modal-note">سيُحذف سجل العميل واشتراكه ودفعاته من لوحة أثر، وبيانات مساحته داخل محرك المنتج. يبقى في سجل العمليات أثر مختصر فقط.</p>
       <input type="hidden" name="tenant_id">
-      <ol class="purge-steps">
-        <li>
-          <strong>1. نزّل النسخة الاحتياطية</strong>
-          <p class="muted">الحذف مرفوض من الخادم قبل تنزيل نسخة مطابقة للحالة الحالية.</p>
-          <button id="purge-export-button" class="button button-secondary button-small" type="button">تنزيل نسخة احتياطية</button>
-          <p id="purge-export-state" class="muted"></p>
-        </li>
-        <li>
-          <strong>2. أكّد المعرّف</strong>
-          <p class="muted">اكتب <code id="purge-slug" dir="ltr"></code> حرفيًا.</p>
-          <input name="confirm_slug" required maxlength="63" dir="ltr" autocomplete="off">
-        </li>
-      </ol>
+      <p id="purge-export-state" class="purge-backup"></p>
+      <label class="field">اكتب <code id="purge-slug" dir="ltr"></code> للتأكيد
+        <input name="confirm_slug" required maxlength="63" dir="ltr" autocomplete="off" placeholder="المعرّف كما هو">
+      </label>
       <p id="purge-error" class="form-error" role="alert"></p>
       <div class="modal-actions"><button class="button button-quiet" type="button" data-close-dialog>إلغاء</button><button id="purge-submit" class="button button-danger" type="submit" disabled>حذف نهائي</button></div>
     </form>

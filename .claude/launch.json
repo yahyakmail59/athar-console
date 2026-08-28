@@ -4,8 +4,28 @@
     {
       "name": "clinic",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "dev", "--config", "../athar-clinic/worker/wrangler.jsonc", "--port", "8788", "--local"],
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "../athar-clinic/worker/wrangler.jsonc",
+        "--port",
+        "8788",
+        "--local"
+      ],
       "port": 8788
+    },
+    {
+      "name": "console",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--port",
+        "8790",
+        "--local"
+      ],
+      "port": 8790
     }
   ]
 }

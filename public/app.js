@@ -160,7 +160,16 @@ const RESTAURANT_BRAND_KIT_INFO = {
   warm_amber: { description: 'كهرماني دافئ، Almarai وAnton.', swatch: '#C2540A' },
 };
 
-const productIcons = { restaurant: '◉', school: '▤', pharmacy: '✚', clinic: '◇' };
+/** أيقونة المنتج من المجموعة المضمّنة: رمزٌ لكل معنى، لا معنيان لرمز. */
+function productIcon(productId) {
+  const known = ['restaurant', 'school', 'pharmacy', 'clinic'];
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#i-${known.includes(productId) ? productId : 'clients'}`);
+  svg.append(use);
+  return svg;
+}
 
 function badge(value) {
   return element('span', { className: `badge badge-${value}`, text: statusLabels[value] || value || '—' });
@@ -210,9 +219,8 @@ function clientActions(tenant) {
 }
 
 function clientCard(tenant) {
-  const icon = productIcons[tenant.product_id] || '•';
   const header = element('div', { className: 'client-card-header' }, [
-    element('div', { className: 'product-icon', text: icon, attrs: { 'aria-hidden': 'true' } }),
+    element('div', { className: 'product-icon' }, productIcon(tenant.product_id)),
     element('div', { className: 'client-title' }, [
       element('h3', { text: tenant.display_name }),
       element('p', { text: `${tenant.product_name} · ${tenant.slug}` }),
@@ -830,7 +838,7 @@ async function checkHealth(tenant) {
 
 function archiveCard(tenant) {
   const header = element('div', { className: 'client-card-header' }, [
-    element('div', { className: 'product-icon', text: productIcons[tenant.product_id] || '•', attrs: { 'aria-hidden': 'true' } }),
+    element('div', { className: 'product-icon' }, productIcon(tenant.product_id)),
     element('div', { className: 'client-title' }, [
       element('h3', { text: tenant.display_name }),
       element('p', { text: `${tenant.product_name} · ${tenant.slug}` }),

@@ -9,6 +9,55 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
+  <!-- مجموعة أيقونات واحدة، مضمّنة في الصفحة.
+       كانت الرموز محارف يونيكود متفرّقة: ▤ للتقارير وللمدارس معًا، ◇
+       للباقات وللعيادات، و🗄 إيموجي ملوّن وسط رموز هندسية رمادية. رمزان
+       بمعنيين يُربكان، وخلط الإيموجي بالمحارف يجعل الشريط يبدو مجموعًا لا
+       مصمَّمًا. وهي مضمّنة لا مجلوبة: `default-src 'self'` في `_headers`،
+       ولا يُضعَّف حدّ أمني لأجل أيقونة. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="i-overview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3.5 10.5 12 4l8.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5h-4v-6h-6v6H5A1.5 1.5 0 0 1 3.5 19z"/>
+    </symbol>
+    <symbol id="i-clients" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3.2 2.5-5.2 5.5-5.2s5.5 2 5.5 5.2"/>
+      <path d="M16 5.2a3 3 0 0 1 0 5.8M17.5 14.9c2 .7 3.2 2.4 3.2 5.1"/>
+    </symbol>
+    <symbol id="i-leads" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2.4"/><path d="m3.8 7 7.1 5.2a2 2 0 0 0 2.2 0L20.2 7"/>
+    </symbol>
+    <symbol id="i-plans" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11.4 3.2 4 6.1v5.4c0 4.3 3 8.1 7.4 9.3.4.1.8.1 1.2 0 4.4-1.2 7.4-5 7.4-9.3V6.1l-7.4-2.9a1.6 1.6 0 0 0-1.2 0z"/>
+      <path d="m9.2 12 2 2 3.6-3.8"/>
+    </symbol>
+    <symbol id="i-reports" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20h16"/><path d="M7 20v-6M12 20V6M17 20v-9"/>
+    </symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="4.4" rx="1.4"/><path d="M5 8.4V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V8.4"/><path d="M10 12h4"/>
+    </symbol>
+    <symbol id="i-audit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 5h11M8 12h11M8 19h11"/><circle cx="4.4" cy="5" r="1.1"/><circle cx="4.4" cy="12" r="1.1"/><circle cx="4.4" cy="19" r="1.1"/>
+    </symbol>
+    <symbol id="i-site" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13.5 5H6.4A1.4 1.4 0 0 0 5 6.4v11.2A1.4 1.4 0 0 0 6.4 19h11.2a1.4 1.4 0 0 0 1.4-1.4V10.5"/>
+      <path d="M14.5 4h5.5v5.5M20 4l-8 8"/>
+    </symbol>
+    <symbol id="i-restaurant" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 3v8.5a2.2 2.2 0 0 0 4.4 0V3M9.2 11.5V21"/>
+      <path d="M16.4 3c-1.2 1.4-1.8 3.2-1.8 5.2 0 1.6.7 2.6 2 2.9V21"/>
+    </symbol>
+    <symbol id="i-school" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m12 4 9 4.2-9 4.2-9-4.2z"/><path d="M6.6 10.4V15c0 1.7 2.4 3 5.4 3s5.4-1.3 5.4-3v-4.6"/><path d="M20.4 8.6v5"/>
+    </symbol>
+    <symbol id="i-pharmacy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="4.2"/><path d="M12 8.4v7.2M8.4 12h7.2"/>
+    </symbol>
+    <symbol id="i-clinic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20.5c-1.6 0-2-2.6-2.3-4.2-.3-1.5-1-2-1.9-2-1.4 0-2.3-1.5-2.3-3.8C5.5 6.9 7.6 4 10.2 4c1 0 1.4.4 1.8.4s.8-.4 1.8-.4c2.6 0 4.7 2.9 4.7 6.5 0 2.3-.9 3.8-2.3 3.8-.9 0-1.6.5-1.9 2-.3 1.6-.7 4.2-2.3 4.2z"/>
+    </symbol>
+  </svg>
+
   <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 
   <main id="login-view" class="login-view" hidden>
@@ -33,17 +82,20 @@
         <span><strong>أثر ميديا</strong><small>مركز التشغيل</small></span>
       </a>
       <nav class="nav-list" aria-label="التنقل الرئيسي">
-        <button class="nav-item is-active" data-view="overview" type="button"><span>⌂</span> نظرة عامة</button>
-        <button class="nav-item" data-view="clients" type="button"><span>◎</span> العملاء</button>
-        <button class="nav-item" data-view="leads" type="button"><span>✉</span> العملاء المحتملون <span id="leads-badge" class="nav-badge" hidden></span></button>
-        <button class="nav-item" data-view="plans" type="button"><span>◇</span> الباقات والأسعار</button>
-        <button class="nav-item" data-view="reports" type="button"><span>▤</span> التقارير</button>
-        <button class="nav-item" data-view="archive" type="button"><span>🗄</span> الأرشيف</button>
-        <button class="nav-item" data-view="audit" type="button"><span>≡</span> سجل العمليات</button>
+        <p class="nav-group">المتابعة اليومية</p>
+        <button class="nav-item is-active" data-view="overview" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-overview"></use></svg> نظرة عامة</button>
+        <button class="nav-item" data-view="clients" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-clients"></use></svg> العملاء</button>
+        <button class="nav-item" data-view="leads" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-leads"></use></svg> العملاء المحتملون <span id="leads-badge" class="nav-badge" hidden></span></button>
+        <p class="nav-group">المال والكتالوج</p>
+        <button class="nav-item" data-view="plans" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-plans"></use></svg> الباقات والأسعار</button>
+        <button class="nav-item" data-view="reports" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-reports"></use></svg> التقارير</button>
+        <p class="nav-group">السجلّ والنظام</p>
+        <button class="nav-item" data-view="archive" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-archive"></use></svg> الأرشيف</button>
+        <button class="nav-item" data-view="audit" type="button"><svg class="nav-icon" aria-hidden="true"><use href="#i-audit"></use></svg> سجل العمليات</button>
         <!-- لوحة أخرى لا شاشة في هذه: تدير محتوى الموقع التعريفي بقاعدتها
              ودخولها. رابط لا دمج — النظامان يُفتحان في أوقات مختلفة، وجلسة
              واحدة تحكم الاثنين توسّع الضرر بلا مقابل. -->
-        <a class="nav-item" href="https://athar.date/admin/" target="_blank" rel="noopener"><span>◫</span> موقع أثر ميديا</a>
+        <a class="nav-item" href="https://athar.date/admin/" target="_blank" rel="noopener"><svg class="nav-icon" aria-hidden="true"><use href="#i-site"></use></svg> موقع أثر ميديا</a>
       </nav>
       <div class="sidebar-footer">
         <span class="status-dot"></span>

@@ -23,7 +23,7 @@
   /* الحبر والأسطح */
   --ink: #1F2D33;
   --ink-soft: #3E5058;
-  --muted: #64777F;
+  --muted: #5A6C74;
   --faint: #8A9BA3;
   --line: #E2E9EC;
   --line-strong: #CFDBE0;
@@ -32,16 +32,16 @@
   --surface-sunk: #F7FAFB;
 
   /* العلامة: أخضر أثر، مهدّأ درجةً كي يحتمل الظهور في كل شاشة */
-  --brand: #17806A;
+  --brand: #106E5A;
   --brand-dark: #0F6151;
   --brand-soft: #DEF0EA;
 
   /* ألوان الحالة — دلالة لا زينة */
-  --info: #2D7DD2;
+  --info: #1F63AE;
   --info-soft: #DCEAF8;
-  --gold: #B0741F;
+  --gold: #8A5A15;
   --gold-soft: #FAEED8;
-  --danger: #C2544F;
+  --danger: #A8403C;
   --danger-soft: #FAE4E3;
 
   --shadow-card: 0 2px 8px rgba(31, 45, 51, .06);
@@ -53,6 +53,47 @@
   --r-modal: 22px;
 
   font-family: 'Segoe UI', system-ui, -apple-system, 'Noto Sans Arabic', Tahoma, Arial, sans-serif;
+}
+
+/**
+ * الوضع الداكن يتبع إعداد النظام.
+ *
+ * اللوحة تُفتح ليلًا لمتابعة تجديد أو دفعة متأخرة، وشاشة بيضاء في غرفة
+ * مظلمة تُتعب. ولا زرّ لتبديله: من ضبط جهازه على الداكن يريده في كل
+ * تطبيق، وزرٌّ ثالث يُضاف إلى شريط مزدحم بلا حاجة.
+ *
+ * الرموز وحدها تُعاد هنا — لا قاعدة عرض ولا مقاس — فلا يتفرّع التنسيق
+ * إلى نسختين تتباعدان مع كل تعديل.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --ink: #E9F1F4;
+    --ink-soft: #C3D2D9;
+    --muted: #9DB2BC;
+    --faint: #7C929C;
+    --line: #243B47;
+    --line-strong: #33505F;
+    --canvas: #0E1B22;
+    --surface: #16262F;
+    --surface-sunk: #1B2E38;
+
+    --brand: #35B394;
+    --brand-dark: #4FC7AA;
+    --brand-soft: #14382F;
+
+    --info: #6FAEE8;
+    --info-soft: #14304A;
+    --gold: #D8A34E;
+    --gold-soft: #3B2E17;
+    --danger: #E28B87;
+    --danger-soft: #3F2422;
+
+    --shadow-card: 0 2px 8px rgba(6, 15, 20, .34);
+    --shadow-raise: 0 6px 20px rgba(6, 15, 20, .42);
+    --shadow-modal: 0 16px 44px rgba(6, 15, 20, .55);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -94,16 +135,23 @@ h3 { margin-bottom: 5px; font-size: .98rem; font-weight: 700; }
 .sidebar-brand span:last-child { display: grid; gap: 1px; }
 .sidebar-brand small, .sidebar-footer small { color: var(--faint); font-size: .72rem; }
 .nav-list { display: grid; gap: 3px; }
+/* عناوين المجموعات: سبعة عناصر في قائمة واحدة تُقرأ كسلسلة بلا معنى.
+   وثلاث مجموعات تجعل العين تقفز إلى المجموعة ثم تبحث داخلها. */
+.nav-group { margin: 16px 8px 6px; color: var(--faint); font-size: .69rem; font-weight: 700; letter-spacing: .06em; }
+.nav-group:first-child { margin-top: 2px; }
 .nav-item {
   display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px;
   border: 0; border-radius: var(--r-btn); color: var(--ink-soft); background: transparent;
   text-align: right; text-decoration: none; font-size: .88rem;
   transition: background .15s ease, color .15s ease;
 }
-.nav-item span { width: 20px; color: var(--faint); text-align: center; font-size: 1.05rem; transition: color .15s ease; }
+/* الأيقونات صارت SVG، فقاعدتا `.nav-item span` القديمتان لم يبقَ لهما هدف
+   إلا شارة العدد — وهي `<span>` — فكانت ترث لون العلامة على خلفية العلامة:
+   رقمٌ أخضر على أخضر لا يُرى. حُذفتا. */
+.nav-icon { flex: 0 0 19px; width: 19px; height: 19px; color: var(--faint); transition: color .15s ease; }
+.nav-item.is-active .nav-icon { color: var(--brand); }
 .nav-item:hover { background: var(--surface-sunk); }
 .nav-item.is-active { color: var(--brand-dark); background: var(--brand-soft); font-weight: 700; }
-.nav-item.is-active span { color: var(--brand); }
 .sidebar-footer { display: flex; align-items: center; gap: 9px; margin-top: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-btn); font-size: .8rem; }
 .sidebar-footer span:nth-child(2) { display: grid; gap: 1px; }
 .status-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
@@ -186,7 +234,8 @@ h3 { margin-bottom: 5px; font-size: .98rem; font-weight: 700; }
 }
 .client-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-raise); }
 .client-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 13px; }
-.product-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; color: var(--brand); background: var(--brand-soft); font-size: 1.15rem; }
+.product-icon { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 12px; color: var(--brand); background: var(--brand-soft); }
+.product-icon svg { width: 21px; height: 21px; }
 .client-title { flex: 1; min-width: 0; }
 .client-title h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .client-title p { margin: 0; color: var(--muted); font-size: .76rem; }
@@ -335,3 +384,19 @@ tr:last-child td { border-bottom: 0; }
 /* الرسالة نصّ حرّ من زائر: `pre-wrap` يحفظ أسطره، و`overflow` يمنع سطرًا
    واحدًا طويلًا (رابط بلا مسافات) من توسيع البطاقة وكسر الشبكة. */
 .lead-message { flex: 1; margin: 13px 0; padding: 12px 13px; border-radius: var(--r-btn); background: var(--surface-sunk); color: var(--ink-soft); font-size: .82rem; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 190px; overflow-y: auto; }
+
+/* ============================================================
+   تعديلات الوضع الداكن على المكوّنات
+   ============================================================
+   في آخر الملف لا مع الرموز في أوّله: هذه قواعد مكوّنات بالوزن نفسه الذي
+   لقواعدها الفاتحة، فالمتأخّر يفوز. وضعُها في الأعلى يجعلها تُكتب ثم
+   تُلغى — وهو ما حدث فعلًا: بقي الزرّ الأساسي أبيض على أخضر فاتح بتباين
+   2.6:1، أي نصّ لا يكاد يُقرأ.
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  /* الأبيض الصريح على أخضر فاتح لا يُقرأ: الحبر الداكن يعطي 8:1. */
+  .button-primary, .nav-badge, .brand-mark { color: var(--canvas); }
+  .button-danger:hover { color: var(--canvas); }
+  .topbar { background: rgba(14, 27, 34, .88); }
+  .toolbar input:focus, .toolbar select:focus { background: var(--surface-sunk); }
+}

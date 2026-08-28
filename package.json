@@ -9,7 +9,7 @@
     "types": "wrangler types --config wrangler.jsonc",
     "check": "npm run types && tsc --noEmit",
     "build:test": "npm run types && tsc --rootDir . --outDir .test-build --noEmit false",
-    "test": "npm run build:test && node --test tests/*.node.test.mjs",
+    "test": "npm run build:test && node --test tests/*.test.mjs",
     "db:migrate:local": "wrangler d1 migrations apply athar-console --local --config wrangler.jsonc",
     "deploy:check": "wrangler deploy --dry-run --config wrangler.jsonc",
     "verify:live": "node scripts/verify-live.mjs",

@@ -30,7 +30,7 @@ function fakeD1(sqlite) {
 function seeded() {
   const db = new DatabaseSync(':memory:');
   db.exec(`
-    CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT);
+    CREATE TABLE products (id TEXT PRIMARY KEY, name_ar TEXT);
     CREATE TABLE customers (id TEXT PRIMARY KEY, display_name TEXT, phone TEXT);
     CREATE TABLE tenants (id TEXT PRIMARY KEY, customer_id TEXT, product_id TEXT,
       display_name TEXT, status TEXT);

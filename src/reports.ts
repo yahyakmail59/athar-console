@@ -110,13 +110,13 @@ export async function revenueReport(
     ).all<Record<string, never>>(),
 
     db.prepare(
-      `SELECT t.product_id, p.name AS product_name, s.currency,
+      `SELECT t.product_id, p.name_ar AS product_name, s.currency,
               COUNT(*) AS active, SUM(${MONTHLY_SHARE}) AS mrr_minor
        FROM subscriptions s
        JOIN tenants t ON t.id = s.tenant_id
        JOIN products p ON p.id = t.product_id
        WHERE s.status = 'active' AND t.status = 'active'
-       GROUP BY t.product_id, p.name, s.currency
+       GROUP BY t.product_id, p.name_ar, s.currency
        ORDER BY mrr_minor DESC`,
     ).all<Record<string, never>>(),
   ]);

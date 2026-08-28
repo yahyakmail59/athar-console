@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 const CONSOLE = process.env.ATHAR_CONSOLE_URL || 'https://console.athar.date';
 const SCHOOL = process.env.ATHAR_SCHOOL_URL || 'https://school.athar.date';
 const PHARMA = process.env.ATHAR_PHARMA_URL || 'https://pharmacy.athar.date';
+const CLINIC = process.env.ATHAR_CLINIC_URL || 'https://clinic.athar.date';
 // المطاعم وحدها بنطاق لكل مستأجر — فلا مضيف واحد لها. الـAPI الإداري على
 // نطاق أي مطعم، وصفحة المطعم على نطاقه هو.
 const RESTAURANT_DOMAIN = process.env.ATHAR_RESTAURANT_DOMAIN || 'athar.date';
@@ -86,6 +87,36 @@ function check(area, question, passed, detail = '') {
 
 /* ==================== أدوات المدرسة ==================== */
 
+/**
+ * مقعد متصفّح للعيادة.
+ *
+ * العيادة وحدها بين المنتجات لا تستعمل رمزًا حاملًا: جلستها كعكة، ورمز
+ * الحماية كعكة أخرى، وهو ما تفعله واجهتها المنسوخة حرفيًا. ومدقّقٌ يتكلّم
+ * رمزًا حاملًا يشهد لمسار لا يسلكه أحد.
+ */
+function clinicSeat() {
+  const jar = new Map();
+  const call = async (path, { method = 'GET', body } = {}) => {
+    const cookie = [...jar.entries()].map(([key, value]) => `${key}=${value}`).join('; ');
+    const csrf = jar.get('csrftoken');
+    const response = await fetch(`${CLINIC}${path}`, {
+      method,
+      headers: {
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(csrf && method !== 'GET' ? { 'X-CSRFToken': csrf } : {}),
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body,
+    });
+    for (const line of response.headers.getSetCookie?.() ?? []) {
+      const [pair] = line.split(';');
+      const index = pair.indexOf('=');
+      jar.set(pair.slice(0, index).trim(), pair.slice(index + 1).trim());
+    }
+    return { status: response.status, payload: await response.json().catch(() => null) };
+  };
+  return { call, jar };
+}
 async function schoolLogin(credentials) {
   const response = await fetch(`${SCHOOL}/api/login`, {
     method: 'POST',
@@ -209,11 +240,18 @@ try {
     createdProfile?.name === 'مدرسة التدقيق' && createdProfile?.logoDataUrl === AUDIT_SCHOOL_LOGO,
     `${createdProfile?.name} / logo=${Boolean(createdProfile?.logoDataUrl)}`);
   check('مدرسة/بيانات العرض', 'النسخة التجريبية تصل ببيانات كافية',
-    (demo.stores.students?.length || 0) >= 20 && (demo.stores.attendanceRecords?.length || 0) > 100,
-    `طلاب=${demo.stores.students?.length || 0} حضور=${demo.stores.attendanceRecords?.length || 0}`);
+    (demo.stores.students?.length || 0) >= 20,
+    `طلاب=${demo.stores.students?.length || 0}`);
 
-  check('مدرسة/الباقة الأساسية', 'المالية محجوبة على الخادم',
-    demo.stores.invoices === undefined && demo.stores.payments === undefined);
+  // الحضور والشهادات انتقلا إلى الباقة الكاملة بقرار المشغّل، فغيابهما هنا
+  // هو السلوك المطلوب لا نقصٌ في البذرة. وكان هذا الفحص يطلب أكثر من مئة
+  // سجل حضور في الأساسية — فشهد لعقد أُلغي.
+  check('مدرسة/الباقة الأساسية', 'المالية والحضور والشهادات محجوبة على الخادم',
+    demo.stores.invoices === undefined && demo.stores.payments === undefined
+    && demo.stores.attendanceRecords === undefined && demo.stores.certificates === undefined,
+    `فواتير=${demo.stores.invoices === undefined ? 'محجوب' : 'ظاهر'}`
+    + ` حضور=${demo.stores.attendanceRecords === undefined ? 'محجوب' : 'ظاهر'}`
+    + ` شهادات=${demo.stores.certificates === undefined ? 'محجوب' : 'ظاهر'}`);
 
   // تغيير الباقة
   const planChange = await console_(`/api/tenants/${schoolTenant.id}/plan`, {
@@ -225,9 +263,11 @@ try {
     `engine_synced=${planChange.payload?.engine_synced} plan=${afterPlan?.plan}`);
 
   const afterUpgrade = await schoolStores(schoolToken);
-  check('مدرسة/الباقة الكاملة', 'المالية تظهر بعد الترقية',
-    (afterUpgrade.stores.invoices?.length || 0) > 0,
-    `فواتير=${afterUpgrade.stores.invoices?.length || 0}`);
+  check('مدرسة/الباقة الكاملة', 'المالية والحضور يظهران بعد الترقية',
+    (afterUpgrade.stores.invoices?.length || 0) > 0
+    && (afterUpgrade.stores.attendanceRecords?.length || 0) > 100,
+    `فواتير=${afterUpgrade.stores.invoices?.length || 0}`
+    + ` حضور=${afterUpgrade.stores.attendanceRecords?.length || 0}`);
 
   // تغيير الهوية
   const rename = await console_(`/api/tenants/${schoolTenant.id}/customer`, {
@@ -300,6 +340,93 @@ try {
     archivedList.some((t) => t.id === schoolTenant.id) && restore.payload?.status === 'suspended',
     restore.payload?.status);
 
+  /* ---------- العيادة ---------- */
+
+  const clinicSlug = `audit-clinic-${stamp}`;
+  const clinicCreate = await console_('/api/tenants', {
+    method: 'POST',
+    body: JSON.stringify({
+      display_name: 'عيادة التدقيق', slug: clinicSlug, product_id: 'clinic',
+      environment: 'demo', admin_username: 'audit.doctor',
+      admin_full_name: 'د. سلام التدقيق',
+      plan_id: catalog.plans.find((p) => p.product_id === 'clinic').id,
+      phone: '0599000000',
+    }),
+  });
+  const clinicTenant = { id: clinicCreate.payload?.tenant_id, slug: clinicSlug };
+  if (clinicTenant.id) created.push(clinicTenant);
+
+  check('عيادة/إنشاء', 'اللوحة تنشئ عيادة في المحرك',
+    clinicCreate.status === 201 && Boolean(clinicCreate.payload.credentials?.login_id),
+    clinicCreate.payload?.external_tenant_id || clinicCreate.payload?.error || '');
+
+  const clinicCreds = clinicCreate.payload?.credentials || {};
+  check('عيادة/اسم المستخدم', 'الاسم المختار من اللوحة هو المستخدم فعلًا',
+    clinicCreds.username === 'audit.doctor', clinicCreds.username);
+
+  const clinicId = clinicCreate.payload?.external_tenant_id;
+  const seat = clinicSeat();
+  await seat.call(`/?clinic=${encodeURIComponent(clinicId)}`);
+  const clinicLogin = await seat.call('/api/auth/login/', {
+    method: 'POST',
+    body: JSON.stringify({ username: 'doctor', password: clinicCreds.secret }),
+  });
+  check('عيادة/دخول', 'بيانات اللوحة تفتح العيادة من الشاشة نفسها',
+    clinicLogin.status === 200, `HTTP ${clinicLogin.status}`);
+
+  check('عيادة/اسم الطبيب', 'الاسم المُدخل في اللوحة هو ما تناديه به الشاشة',
+    clinicLogin.payload?.full_name === 'د. سلام التدقيق', clinicLogin.payload?.full_name);
+
+  // الهوية تُكتب في HTML على الخادم: واتساب لا يشغّل جافاسكربت.
+  const clinicPage = await fetch(`${CLINIC}/settings?clinic=${encodeURIComponent(clinicId)}`);
+  const clinicHtml = await clinicPage.text();
+  check('عيادة/الهوية', 'اسم العيادة يصل الصفحة قبل أي جافاسكربت',
+    clinicHtml.includes('data-clinic-name="عيادة التدقيق"'),
+    (clinicHtml.match(/<title>([^<]*)<\/title>/) || [])[1]);
+  check('عيادة/روابط نظيفة', 'مسار الشاشة يُخدَم بلا هاش',
+    clinicPage.status === 200, `HTTP ${clinicPage.status}`);
+
+  const clinicPatients = await seat.call('/api/patients/');
+  check('عيادة/بيانات العرض', 'النسخة التجريبية تصل ببيانات لا فارغة',
+    (clinicPatients.payload?.length || 0) >= 5, `مرضى=${clinicPatients.payload?.length || 0}`);
+
+  const clinicTreatments = await seat.call('/api/treatments/');
+  const CONDITIONS = ['healthy', 'caries', 'filling', 'crown', 'root_canal', 'extracted', 'implant'];
+  check('عيادة/مخطط الأسنان', 'حالات البذرة من مفردات المخطط فيتلوّن السنّ',
+    (clinicTreatments.payload || []).length > 0
+    && (clinicTreatments.payload || []).every((row) => CONDITIONS.includes(row.status)),
+    (clinicTreatments.payload || []).map((row) => row.status).join('، '));
+
+  const clinicSettings = (await seat.call('/api/clinic-settings/')).payload?.[0] || {};
+  const someDay = Object.values(clinicSettings.working_hours || {})[0];
+  check('عيادة/ساعات العمل', 'الشكل هو ما تقرؤه الواجهة، وإلا استحال الحجز',
+    Boolean(someDay && someDay.start && someDay.end), JSON.stringify(someDay || null));
+
+  // الإيقاف من اللوحة يصل المحرك.
+  const clinicSuspend = await console_(`/api/tenants/${clinicTenant.id}/lifecycle`, {
+    method: 'POST', body: JSON.stringify({ action: 'suspend' }),
+  });
+  const afterSuspend = await seat.call('/api/patients/');
+  check('عيادة/الإيقاف', 'الإيقاف من اللوحة يقطع جلسات العيادة فورًا',
+    clinicSuspend.status === 200 && (afterSuspend.status === 401 || afterSuspend.status === 403),
+    `لوحة=${clinicSuspend.status} عيادة=${afterSuspend.status}`);
+
+  await console_(`/api/tenants/${clinicTenant.id}/lifecycle`, {
+    method: 'POST', body: JSON.stringify({ action: 'resume' }),
+  });
+  const clinicResumed = clinicSeat();
+  await clinicResumed.call(`/?clinic=${encodeURIComponent(clinicId)}`);
+  const resumedLogin = await clinicResumed.call('/api/auth/login/', {
+    method: 'POST',
+    body: JSON.stringify({ username: 'doctor', password: clinicCreds.secret }),
+  });
+  check('عيادة/الاستئناف', 'الاستئناف يعيد الخدمة', resumedLogin.status === 200,
+    `HTTP ${resumedLogin.status}`);
+
+  const clinicHealth = await console_(`/api/tenants/${clinicTenant.id}/health`, { method: 'POST', body: '{}' });
+  check('عيادة/الصحة', 'فحص الصحة يسأل المحرك ويعيد حالته',
+    clinicHealth.status === 200 && Boolean(clinicHealth.payload?.status || clinicHealth.payload?.counts),
+    clinicHealth.payload?.status || JSON.stringify(clinicHealth.payload?.counts || {}));
   /* ---------- الصيدلية ---------- */
 
   const pharmaSlug = `audit-pharma-${stamp}`;

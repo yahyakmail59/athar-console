@@ -104,6 +104,7 @@ const PRODUCT_ADAPTERS: Record<string, { binding: keyof Env; urlVar: keyof Env; 
   pharmacy: { binding: 'PHARMA_ADAPTER', urlVar: 'PHARMA_ADAPTER_URL', label: 'الصيدليات' },
   school: { binding: 'SCHOOL_ADAPTER', urlVar: 'SCHOOL_ADAPTER_URL', label: 'المدارس' },
   restaurant: { binding: 'RESTAURANT_ADAPTER', urlVar: 'RESTAURANT_ADAPTER_URL', label: 'المطاعم' },
+  clinic: { binding: 'CLINIC_ADAPTER', urlVar: 'CLINIC_ADAPTER_URL', label: 'العيادات' },
 };
 
 export const hasAdapter = (productId: string): boolean =>

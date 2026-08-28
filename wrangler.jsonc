@@ -78,6 +78,10 @@
       "binding": "RESTAURANT_ADAPTER",
       "service": "athar-restaurant-api"
     },
+    {
+      "binding": "CLINIC_ADAPTER",
+      "service": "athar-clinic-api"
+    },
     // موقع أثر التعريفي: يُنادى لسحب العملاء المحتملين من نموذج التواصل.
     {
       "binding": "SITE_ADAPTER",

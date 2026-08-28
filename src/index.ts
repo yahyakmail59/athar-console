@@ -534,7 +534,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     }, 201);
   } catch (error) {
     const code = error instanceof ProductAdapterError ? error.code : 'PROVISIONING_FAILED';
-    const message = error instanceof ProductAdapterError ? error.message : 'فشل إنشاء الصيدلية في محرك المنتج.';
+    const message = error instanceof ProductAdapterError ? error.message : 'فشل إنشاء المساحة في محرك المنتج.';
     const finishedAt = nowIso();
     await env.DB.batch([
       env.DB.prepare("UPDATE tenants SET status = 'failed', last_health_status = 'unreachable', updated_at = ? WHERE id = ?")
@@ -637,7 +637,7 @@ async function retryProvision(request: Request, env: Env, tenantId: string, ipHa
     });
   } catch (error) {
     const code = error instanceof ProductAdapterError ? error.code : 'PROVISIONING_FAILED';
-    const message = error instanceof ProductAdapterError ? error.message : 'فشلت إعادة محاولة إنشاء الصيدلية.';
+    const message = error instanceof ProductAdapterError ? error.message : 'فشلت إعادة محاولة الإنشاء في محرك المنتج.';
     const finishedAt = nowIso();
     await env.DB.batch([
       env.DB.prepare("UPDATE tenants SET status = 'failed', last_health_status = 'unreachable', updated_at = ? WHERE id = ?")
@@ -771,7 +771,7 @@ async function lifecycle(request: Request, env: Env, tenantId: string, ipHash: s
       });
     } catch (error) {
       const code = error instanceof ProductAdapterError ? error.code : 'LIFECYCLE_FAILED';
-      const message = error instanceof ProductAdapterError ? error.message : 'فشل تحديث حالة الصيدلية في محرك المنتج.';
+      const message = error instanceof ProductAdapterError ? error.message : 'فشل تحديث الحالة في محرك المنتج.';
       // المحرك لا يعرف هذا المستأجر: حُذف من خارج أثر أو لم يكتمل إنشاؤه.
       // إيقافه أو أرشفته لا معنى لهما هناك، والتمسك بالفشل يترك السجل عالقًا
       // في اللوحة بلا مخرج. نكمل تغيير الحالة تجاريًا ونسجّل الانفصال.

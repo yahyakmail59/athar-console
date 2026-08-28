@@ -521,7 +521,7 @@ async function submitCreate(event) {
     byId('create-dialog').close();
     if (payload.credentials) {
       showProvisionedCredentials(payload);
-      showToast('تم إنشاء الصيدلية وربطها بلوحة أثر.');
+      showToast('أُنشئت المساحة ورُبطت بلوحة أثر.');
     } else if (payload.provisioning_ok === false) {
       showToast(`سُجل العميل لكن تعذر إنشاء الصيدلية: ${payload.error}`, true);
     } else {

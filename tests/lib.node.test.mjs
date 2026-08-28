@@ -115,6 +115,7 @@ test('every adapter path the console calls exists in every engine', async () => 
     pharmacy: '../pharma-gaza/worker/worker.js',
     school: '../rowad-gaza-school/worker/worker.js',
     restaurant: '../athar-restaurant/worker/adapter.js',
+    clinic: '../athar-clinic/worker/adapter.js',
   };
   for (const product of wired) {
     assert.ok(

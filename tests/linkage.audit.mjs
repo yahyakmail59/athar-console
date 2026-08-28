@@ -16,11 +16,17 @@
 
 import { readFileSync } from 'node:fs';
 
-const CONSOLE = process.env.ATHAR_CONSOLE_URL || 'https://athar-console.yahyakmail59.workers.dev';
-const SCHOOL = process.env.ATHAR_SCHOOL_URL || 'https://athar-school-api.yahyakmail59.workers.dev';
-const PHARMA = process.env.ATHAR_PHARMA_URL || 'https://pharma-sync-api.yahyakmail59.workers.dev';
-const RESTAURANT = process.env.ATHAR_RESTAURANT_URL
-  || 'https://athar-restaurant-api.yahyakmail59.workers.dev';
+// عناوين athar.date وحدها: workers.dev مغلق على الخدمات الخمس، وأداة
+// تدقيق تشير إلى مضيف ميت تفشل كلها فيبدو الربط معطوبًا وهو سليم.
+const CONSOLE = process.env.ATHAR_CONSOLE_URL || 'https://console.athar.date';
+const SCHOOL = process.env.ATHAR_SCHOOL_URL || 'https://school.athar.date';
+const PHARMA = process.env.ATHAR_PHARMA_URL || 'https://pharmacy.athar.date';
+// المطاعم وحدها بنطاق لكل مستأجر — فلا مضيف واحد لها. الـAPI الإداري على
+// نطاق أي مطعم، وصفحة المطعم على نطاقه هو.
+const RESTAURANT_DOMAIN = process.env.ATHAR_RESTAURANT_DOMAIN || 'athar.date';
+const restaurantHost = (slug) => `https://${slug}.${RESTAURANT_DOMAIN}`;
+// يُضبط بعد إنشاء المطعم: نداءات الإدارة تمرّ بنطاقه هو لا بمضيف مشترك.
+let currentRestaurantSlug = '';
 const SECRETS = process.env.ATHAR_SECRETS_FILE
   || 'C:/Users/yahya/Desktop/compony/secrets/athar-console-admin.txt';
 
@@ -44,7 +50,7 @@ async function console_(path, { method = 'GET', body } = {}) {
 /* ==================== أدوات المطعم ==================== */
 
 async function restaurantLogin(credentials, device = 'linkage-audit') {
-  const response = await fetch(`${RESTAURANT}/api/login`, {
+  const response = await fetch(`${restaurantHost(credentials.slug || currentRestaurantSlug)}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -58,7 +64,7 @@ async function restaurantLogin(credentials, device = 'linkage-audit') {
 }
 
 const restaurantApi = async (token, path, init = {}) => {
-  const response = await fetch(RESTAURANT + path, {
+  const response = await fetch(restaurantHost(currentRestaurantSlug) + path, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) },
   });
@@ -67,7 +73,7 @@ const restaurantApi = async (token, path, init = {}) => {
 
 /** الصفحة العامة نصًّا: الفحص الوحيد الذي يرى ما يراه زبون المطعم. */
 async function restaurantPage(slug, path = '') {
-  const response = await fetch(`${RESTAURANT}/r/${slug}/${path}`);
+  const response = await fetch(`${restaurantHost(slug)}/${path}`);
   return { status: response.status, html: await response.text() };
 }
 
@@ -372,6 +378,7 @@ try {
 
   const restoCreds = restoCreate.payload.credentials;
   const restoPublicSlug = restoCreate.payload.slug || restoSlug;
+  currentRestaurantSlug = restoPublicSlug;
 
   const restoSession = await restaurantLogin(restoCreds);
   check('مطعم/دخول', 'بيانات اللوحة تفتح لوحة المطعم', restoSession.status === 200);
@@ -400,7 +407,7 @@ try {
   // عقد `site/js/main.js` الحرفي: `items`/`qty` لا `lines`/`quantity`.
   const menuJson = await restaurantApi(restoToken, '/api/content/menu_items');
   const pricedItem = menuJson.payload?.rows?.find((row) => Number(row.is_priced) && Number(row.price_minor) > 0);
-  const forgedOrder = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/`, {
+  const forgedOrder = await fetch(`${restaurantHost(restoPublicSlug)}/order/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -417,7 +424,7 @@ try {
     `المحفوظ=${placed?.total_minor} المتوقع=${Number(pricedItem.price_minor) * 2}`);
 
   // الإيصال يثبت أن resvg والخطوط على R2 يعملان في الإنتاج لا محليًا فقط.
-  const receipt = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/o/${forgedToken}/receipt.png`);
+  const receipt = await fetch(`${restaurantHost(restoPublicSlug)}/o/${forgedToken}/receipt.png`);
   const receiptBytes = new Uint8Array(await receipt.arrayBuffer());
   check('مطعم/الإيصال', 'الإيصال يُرسم صورةً على الخادم بخطوط R2',
     receipt.status === 200 && receiptBytes[0] === 0x89 && receiptBytes.length > 5000,
@@ -451,7 +458,7 @@ try {
     body: JSON.stringify({ plan_id: catalog.plans.find((p) => p.id === 'restaurant:menu').id }),
   });
   const beforeCount = (await restaurantApi(restoToken, '/api/orders?limit=200')).payload?.orders?.length || 0;
-  const notPersisted = await fetch(`${RESTAURANT}/r/${restoPublicSlug}/order/`, {
+  const notPersisted = await fetch(`${restaurantHost(restoPublicSlug)}/order/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

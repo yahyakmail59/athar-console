@@ -9,3 +9,4 @@ coverage/
 .test-build/
 worker-configuration.d.ts
 *.log
+q.sql

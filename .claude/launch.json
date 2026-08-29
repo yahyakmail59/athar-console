@@ -26,6 +26,48 @@
         "--local"
       ],
       "port": 8790
+    },
+    {
+      "name": "school",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "../rowad-gaza-school/worker/wrangler.jsonc",
+        "--port",
+        "8792",
+        "--local"
+      ],
+      "port": 8792
+    },
+    {
+      "name": "pharmacy",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "../pharma-gaza/wrangler.jsonc",
+        "--port",
+        "8794",
+        "--local"
+      ],
+      "port": 8794
+    },
+    {
+      "name": "restaurant",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "../athar-restaurant/worker/wrangler.jsonc",
+        "--port",
+        "8796",
+        "--local"
+      ],
+      "port": 8796
     }
   ]
 }

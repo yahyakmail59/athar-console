@@ -1334,7 +1334,13 @@ function bindEvents() {
     document.querySelectorAll('[data-layout]').forEach((node) => node.classList.toggle('is-active', node === item));
     renderClients();
   }));
+  // كل حاوية تُرسم فيها `clientCard` تحتاج هذا المستمع: أزرار البطاقة
+  // مفوَّضة بـ`data-action` لا مربوطة بالعنصر. وحاوية العملاء المحتملين
+  // كانت تُرسم فيها البطاقات نفسها بلا مستمع، فمات كل زرّ فيها — لا
+  // «بيانات دخول جديدة» وحده. والعطل صامت: الزرّ يظهر ويُضغط ولا يحدث
+  // شيء ولا رسالة، فيبدو النظام معطوبًا لا الصفحة.
   byId('clients-container').addEventListener('click', handleClientAction);
+  byId('leads-container').addEventListener('click', handleClientAction);
   byId('recent-clients').addEventListener('click', handleClientAction);
   byId('create-product').addEventListener('change', updateCreateOptions);
   byId('create-plan').addEventListener('change', updateCreateOptions);

@@ -427,3 +427,6 @@ tr:last-child td { border-bottom: 0; }
   .topbar { background: rgba(14, 27, 34, .88); }
   .toolbar input:focus, .toolbar select:focus { background: var(--surface-sunk); }
 }
+
+/* زرّا النافذة: الموقع العام ولوحة الإدارة جنبًا إلى جنب. */
+.credential-links { display: flex; flex-wrap: wrap; gap: 10px; }

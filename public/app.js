@@ -564,7 +564,29 @@ function updateDemoVisibility() {
  * بيانات الدخول تصل بشكل موحّد من كل محرك. القراءة تتحمّل المفاتيح القديمة
  * أيضًا، فلا تنكسر الشاشة أمام العميل لو تأخّر نشر محرك عن اللوحة.
  */
-function showProvisionedCredentials(payload) {
+/**
+ * رابط لوحة الإدارة، مبنيًّا لا مكتوبًا بيد.
+ *
+ * محرك المطاعم وحده له لوحة على مسار منفصل (`/admin`)، وبقية المحركات
+ * لوحتها هي نفسها الرابط العام. ولوحة المطعم تقرأ معرّفه من **جزء
+ * العنوان** `#r={slug}` لا من معامل استعلام: المعامل يُرسَل إلى الخادم
+ * ويدخل سجلات الوسطاء ويبقى في سجل التصفّح.
+ *
+ * ولا تمرّ كلمة مرور في عنوان بحال — لا هنا ولا في الجزء. الرابط يملأ
+ * خانة المطعم وحدها، والباقي يُكتب. وقد بُني هذا لأن غيابه جعل الرابط
+ * يُكتب يدويًّا بكلمة مرور في الاستعلام، فلا يعمل ويُسرّب في آنٍ.
+ */
+function adminEntryUrl(publicUrl, productId) {
+  if (productId !== 'restaurant') return '';
+  try {
+    const url = new URL(publicUrl);
+    const slug = url.hostname.split('.')[0];
+    if (!slug) return '';
+    return `${url.origin}/admin#r=${encodeURIComponent(slug)}`;
+  } catch { return ''; }
+}
+
+function showProvisionedCredentials(payload, tenant) {
   const c = payload.credentials || {};
   const loginId = c.login_id || c.pharmacy_id || c.school_id || '—';
   const secret = c.secret || c.owner_pin || c.admin_password || '—';
@@ -578,6 +600,11 @@ function showProvisionedCredentials(payload) {
   const link = byId('credential-link');
   link.href = payload.public_url || '#';
   link.hidden = !payload.public_url;
+
+  const adminLink = byId('credential-admin-link');
+  const adminHref = adminEntryUrl(payload.public_url || '', tenant && tenant.product_id);
+  adminLink.href = adminHref || '#';
+  adminLink.hidden = !adminHref;
   byId('credentials-dialog').showModal();
 }
 
@@ -602,7 +629,7 @@ async function submitCreate(event) {
     const payload = await api('/api/tenants', { method: 'POST', body: JSON.stringify(data) });
     byId('create-dialog').close();
     if (payload.credentials) {
-      showProvisionedCredentials(payload);
+      showProvisionedCredentials(payload, { product_id: data.product_id });
       showToast('أُنشئت المساحة ورُبطت بلوحة أثر.');
     } else if (payload.provisioning_ok === false) {
       showToast(`سُجل العميل لكن تعذر إنشاء الصيدلية: ${payload.error}`, true);
@@ -722,7 +749,7 @@ async function retryProvision(tenant) {
     const payload = await api(`/api/tenants/${encodeURIComponent(tenant.id)}/retry-provision`, {
       method: 'POST', body: '{}',
     });
-    showProvisionedCredentials(payload);
+    showProvisionedCredentials(payload, tenant);
     showToast('نجحت إعادة الإنشاء والربط بلوحة أثر.');
     await loadDashboard(true);
   } catch (error) { showToast(error.message, true); }
@@ -826,8 +853,8 @@ async function resetOwnerPin(tenant) {
   if (!agreed) return;
   try {
     const payload = await api(`/api/tenants/${encodeURIComponent(tenant.id)}/reset-pin`, { method: 'POST', body: '{}' });
-    showProvisionedCredentials(payload);
-    showToast('صدر رقم سري جديد. انسخه الآن قبل إغلاق النافذة.');
+    showProvisionedCredentials(payload, tenant);
+    showToast('صدرت بيانات دخول جديدة. انسخها الآن قبل إغلاق النافذة.');
   } catch (error) { showToast(error.message, true); }
 }
 

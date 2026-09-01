@@ -582,7 +582,10 @@ function adminEntryUrl(publicUrl, productId) {
     const url = new URL(publicUrl);
     const slug = url.hostname.split('.')[0];
     if (!slug) return '';
-    return `${url.origin}/admin#r=${encodeURIComponent(slug)}`;
+    // الشرطة الأخيرة ليست تجميلًا: صفحة اللوحة تطلب أصولها بمسارات نسبية،
+    // ومن `/admin` يحلّها المتصفح إلى جذر النطاق فتردّ 404 — تظهر الصفحة
+    // ولا تعمل. المحرك يحوّل الآن، وهذا الرابط يصل صحيحًا من أوّله.
+    return `${url.origin}/admin/#r=${encodeURIComponent(slug)}`;
   } catch { return ''; }
 }
 
@@ -593,10 +596,16 @@ function showProvisionedCredentials(payload, tenant) {
   byId('credential-pharmacy').textContent = loginId;
   byId('credential-pin').textContent = secret;
   byId('credential-secret-label').textContent = c.secret_label || 'الرقم السري';
+  // الثلاثة تُعرض دائمًا: رمز الدخول واسم المستخدم وكلمة المرور.
+  //
+  // كان السطر يُخفي الاسم حين يكون `owner` — بحجّة أنه الافتراضيّ. لكن
+  // الشاشة التي يدخل فيها المشغّل تطلب الثلاثة، وحقلٌ لا يراه يملؤه
+  // بالتخمين. ومن خمّن `admin` بينما الاسم `owner` رأى «بيانات غير
+  // صحيحة» ولا يعرف أيَّ الثلاثة أخطأ.
   const userRow = byId('credential-user-row');
-  const username = c.username || c.admin_username || '';
+  const username = c.username || c.admin_username || 'owner';
   byId('credential-user').textContent = username;
-  userRow.hidden = !username || username === 'owner';
+  userRow.hidden = false;
   const link = byId('credential-link');
   link.href = payload.public_url || '#';
   link.hidden = !payload.public_url;

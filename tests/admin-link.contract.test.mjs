@@ -32,15 +32,30 @@ function loadAdminEntryUrl() {
   return new Function(`${app.slice(start, end + 2)}; return adminEntryUrl;`)();
 }
 
-test('يبني رابط لوحة المطعم بجزء العنوان', () => {
+/*
+ * والشرطة الأخيرة في `/admin/` ليست تجميلًا.
+ *
+ * كان هذا الفحص يطلب `/admin#r=` — فثبّت العطل بدل أن يكشفه. وصفحة
+ * اللوحة تطلب أصولها بمسارات نسبية (`./app.js`)، فيحلّها المتصفح من
+ * مجلّد العنوان: من `/admin/` تصير `/admin/app.js` وتُخدَم، ومن `/admin`
+ * تصير `/app.js` ولا وجود لها على نطاق المطعم.
+ *
+ * والعطل صامت تمامًا: الصفحة تُرسَم كاملة، وتُملأ الخانات، ثم لا يفعل زرّ
+ * الدخول شيئًا — لأن الشيفرة التي تُنصت إليه لم تُحمَّل. لا رسالة ولا 404
+ * يراه المستخدم، فيظنّ أن كلمة مروره خاطئة ويطلب غيرها.
+ *
+ * والمحرك يحوّل `/admin` إلى `/admin/` الآن، لكن الرابط يجب أن يصل صحيحًا
+ * من أوّله: الرابط يُنسخ ويُرسَل، والتحويل لا يرافقه إن قُصّ عند الشرطة.
+ */
+test('يبني رابط لوحة المطعم بجزء العنوان وبشرطة تُبقي أصولها تُحلّ', () => {
   const adminEntryUrl = loadAdminEntryUrl();
   assert.equal(
     adminEntryUrl('https://demo.athar.date/', 'restaurant'),
-    'https://demo.athar.date/admin#r=demo',
+    'https://demo.athar.date/admin/#r=demo',
   );
   assert.equal(
     adminEntryUrl('https://adana-resurant.athar.date/', 'restaurant'),
-    'https://adana-resurant.athar.date/admin#r=adana-resurant',
+    'https://adana-resurant.athar.date/admin/#r=adana-resurant',
   );
 });
 

@@ -2,6 +2,8 @@ interface Env {
   ADMIN_PASSWORD_HASH: string;
   SESSION_SECRET: string;
   ATHAR_ADAPTER_SECRET: string;
+  // سرّ باب الشركاء — غير سرّ المحوّل عمدًا: تسريب أحدهما لا يفتح الآخر.
+  CRM_PARTNER_SECRET?: string;
   // كل منتج له ربط خدمة في الإنتاج، ورابط HTTP اختياري للتطوير المحلي
   // حيث لا تتوفر Service Bindings بين عمليتي wrangler dev منفصلتين.
   PHARMA_ADAPTER: Fetcher;

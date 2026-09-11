@@ -68,6 +68,20 @@
         "--local"
       ],
       "port": 8796
+    },
+    {
+      "name": "crm",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "../athar-crm/worker/wrangler.jsonc",
+        "--port",
+        "8798",
+        "--local"
+      ],
+      "port": 8798
     }
   ]
 }

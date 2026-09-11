@@ -1,5 +1,6 @@
 import {
   HttpError,
+  MAX_JSON_BYTES,
   addDaysIso,
   assertDate,
   assertMinorAmount,
@@ -11,6 +12,7 @@ import {
   requestId,
   requiredText,
   safeJson,
+  wantsAutoSuspend,
 } from './lib';
 import {
   ProductAdapterError,
@@ -27,6 +29,7 @@ import { syncLeads, unreadLeadCount, type LeadChannel, type RemoteLead } from '.
 import { syncShowcase, type ShowcaseItem } from './showcase';
 import { revenueReport } from './reports';
 import { limitsReport } from './limits';
+import { readPartnerDemo, resolveDemoPlan, verifyPartnerSignature } from './partners';
 
 const SESSION_HOURS = 12;
 const PBKDF2_ROUNDS = 100_000;
@@ -227,14 +230,19 @@ function auditStatement(
   before: unknown,
   after: unknown,
   id: string,
+  /* من فعلها. الافتراض المشغّل أمام الشاشة، وأداة المبيعات تمرّ باسمها
+     — وإلا ظهر في السجل عميلٌ «أنشأه المشغّل» وهو نائم. */
+  actor: { type: 'admin' | 'system' | 'adapter'; id: string } = { type: 'admin', id: 'platform-owner' },
 ): D1PreparedStatement {
   return env.DB.prepare(
     `INSERT INTO audit_logs
      (id, actor_type, actor_id, action, entity_type, entity_id, before_json, after_json,
       ip_hash, request_id, created_at)
-     VALUES (?, 'admin', 'platform-owner', ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     crypto.randomUUID(),
+    actor.type,
+    actor.id,
     action,
     entityType,
     entityId,
@@ -392,8 +400,21 @@ async function dashboard(env: Env): Promise<Response> {
   });
 }
 
-async function createTenant(request: Request, env: Env, ipHash: string): Promise<Response> {
-  const body = await readJson(request);
+/**
+ * ينشئ عميلًا ويُهيّئ مساحته في المحرك.
+ *
+ * `presetBody` لباب الشركاء: أداة المبيعات لا تُرسل جسمًا حرًّا إلى هنا،
+ * بل يبنيه `partnerDemo` بعد أن يقرأ ما وصل ويرفض ما لا يجوز — فيمرّ من
+ * هذا الباب جسمٌ مصنوعٌ في اللوحة لا جسمٌ وصل من الشبكة.
+ */
+async function createTenant(
+  request: Request,
+  env: Env,
+  ipHash: string,
+  presetBody?: Record<string, unknown>,
+  actor?: { type: 'admin' | 'system' | 'adapter'; id: string },
+): Promise<Response> {
+  const body = presetBody ?? await readJson(request);
   const displayName = requiredText(body.display_name, 'اسم العميل', 160);
   const slug = assertSlug(body.slug);
   const productId = requiredText(body.product_id, 'المنتج', 40);
@@ -423,6 +444,18 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const trialExpiresAt = environment === 'demo'
     ? assertDate(body.trial_expires_at || addDaysIso(14), 'انتهاء التجربة', false)
     : null;
+  /*
+   * الإيقاف التلقائيّ عند انتهاء المدّة.
+   *
+   * ✦ افتراضه في المخطّط صفر، فكانت كل تجربة تعمل إلى الأبد — ورسالة
+   * أداة المبيعات تقول للعميل «تعمل أربعة عشر يومًا». وعدٌ لا يُنفَّذ،
+   * والفرق بين تجربةٍ وهديّةٍ دائمة.
+   *
+   * ويبقى الافتراض صفرًا لما يُنشأ من شاشة اللوحة: نسخُ العرض التي
+   * تُفتح أمام العملاء (`demo`, `sanabel`) يجب ألّا تتوقف. فمن يطلب
+   * الإيقاف يطلبه صراحةً — وأداة المبيعات تطلبه.
+   */
+  const autoSuspend = wantsAutoSuspend(body.auto_suspend);
   const customerId = crypto.randomUUID();
   const tenantId = crypto.randomUUID();
   const subscriptionId = crypto.randomUUID();
@@ -442,11 +475,21 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
   const adminFullName = productId === 'clinic'
     ? optionalText(body.admin_full_name, 'اسم الطبيب', 120)
     : '';
-  const schoolLogoDataUrl = productId === 'school'
-    ? optionalText(body.school_logo_data_url, 'شعار المدرسة', 42000)
-    : '';
-  if (schoolLogoDataUrl && !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(schoolLogoDataUrl)) {
-    throw new HttpError(422, 'INVALID_SCHOOL_LOGO', 'بيانات شعار المدرسة غير صالحة.');
+  /*
+   * الشعار: كان للمدارس وحدها، وصار لكل محرك يعرف كيف يعرضه.
+   *
+   * والسبب مبيعيّ لا تقنيّ: العميل يفتح رابط تجربته فيرى شعاره هو في
+   * أوّل ثانيتين — قبل أن يقرأ حرفًا. وحقل `logo_url` كان موجودًا في
+   * محرك المطاعم ويُعرض في الصفحة، ولا شيء يملؤه.
+   *
+   * والاسم القديم `school_logo_data_url` يبقى مقبولًا: لوحة الإنشاء
+   * ترسله، وتغييرُ طرفٍ واحد يكسر الآخر.
+   */
+  const logoDataUrl = optionalText(
+    body.logo_data_url ?? body.school_logo_data_url, 'الشعار', 42000,
+  );
+  if (logoDataUrl && !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(logoDataUrl)) {
+    throw new HttpError(422, 'INVALID_LOGO', 'بيانات الشعار غير صالحة.');
   }
   if (adminUsername && !/^[a-z0-9._-]{3,40}$/.test(adminUsername)) {
     throw new HttpError(422, 'INVALID_ADMIN_USERNAME',
@@ -466,7 +509,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     // اسم مستخدم المدير اختياري: المحرك يضع افتراضه حين يُترك فارغًا.
     admin_username: adminUsername,
     admin_full_name: adminFullName,
-    config: { phone, address, currency: 'ILS', logo_data_url: schoolLogoDataUrl },
+    config: { phone, address, currency: 'ILS', logo_data_url: logoDataUrl },
   };
   const tenantAfter = { tenantId, displayName, slug, productId, planId, environment, status: initialStatus };
 
@@ -488,14 +531,14 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
     env.DB.prepare(
       `INSERT INTO subscriptions
        (id, tenant_id, plan_id, status, price_minor, currency, billing_cycle, starts_at,
-        current_period_start, current_period_end, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        current_period_start, current_period_end, auto_suspend, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       subscriptionId, tenantId, planId, environment === 'demo' ? 'trialing' : 'active',
       priceMinor, currency, plan.billing_cycle, createdAt, createdAt, trialExpiresAt,
-      createdAt, createdAt,
+      autoSuspend, createdAt, createdAt,
     ),
-    auditStatement(env, request, 'tenant.register', 'tenant', tenantId, {}, tenantAfter, ipHash),
+    auditStatement(env, request, 'tenant.register', 'tenant', tenantId, {}, tenantAfter, ipHash, actor),
   ];
   if (shouldProvision) {
     statements.push(
@@ -533,7 +576,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
          WHERE id = ?`,
       ).bind(safeJson(safeResult), finishedAt, finishedAt, provisioningId),
       auditStatement(env, request, 'tenant.provisioned', 'tenant', tenantId,
-        { status: 'provisioning' }, { ...safeResult, tenant_status: 'active' }, ipHash),
+        { status: 'provisioning' }, { ...safeResult, tenant_status: 'active' }, ipHash, actor),
     ]);
     return jsonResponse({
       ok: true,
@@ -555,7 +598,7 @@ async function createTenant(request: Request, env: Env, ipHash: string): Promise
          finished_at = ?, updated_at = ? WHERE id = ?`,
       ).bind(code.slice(0, 80), message.slice(0, 240), finishedAt, finishedAt, provisioningId),
       auditStatement(env, request, 'tenant.provision_failed', 'tenant', tenantId,
-        { status: 'provisioning' }, { status: 'failed', error_code: code }, ipHash),
+        { status: 'provisioning' }, { status: 'failed', error_code: code }, ipHash, actor),
     ]);
     return jsonResponse({
       ok: true,
@@ -1334,6 +1377,67 @@ async function login(request: Request, env: Env): Promise<Response> {
   );
 }
 
+/**
+ * باب الشركاء — قبل حارس الجلسة لأن المُنادي خدمة لا متصفّح.
+ *
+ * لا كعكة ولا CSRF هنا: كلاهما حارسٌ ضدّ متصفّحٍ يُخدَع، ولا متصفّح في
+ * هذا المسار. الحارس توقيعٌ على الجسم كما وصل نصًّا.
+ */
+async function partnerApi(request: Request, env: Env, path: string): Promise<Response> {
+  if (request.method !== 'POST') throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'الطريقة غير مسموحة.');
+
+  const rawBody = await request.text();
+  if (rawBody.length > MAX_JSON_BYTES) {
+    throw new HttpError(413, 'BODY_TOO_LARGE', 'حجم الطلب أكبر من المسموح.');
+  }
+  await verifyPartnerSignature(env, request, rawBody);
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody || '{}') as Record<string, unknown>;
+  } catch {
+    throw new HttpError(400, 'INVALID_JSON', 'الجسم ليس JSON صالحًا.');
+  }
+
+  const ipHash = await sha256(clientIp(request));
+  const actor = { type: 'adapter' as const, id: 'athar-crm' };
+
+  if (path === '/api/partners/demo') {
+    const input = readPartnerDemo(body);
+    return createTenant(request, env, ipHash, {
+      display_name: input.displayName,
+      slug: input.slug,
+      product_id: input.productId,
+      plan_id: await resolveDemoPlan(env, input.productId, input.planCode),
+      /* مثبّت. لا يُقرأ من الجسم أصلًا، فلا يبلغ الشريكُ الإنتاجَ بحال. */
+      environment: 'demo',
+      brand_kit_id: input.brandKitCode ? `${input.productId}:${input.brandKitCode}` : '',
+      phone: input.phone,
+      logo_data_url: input.logoDataUrl,
+      /* تجربةُ المبيعات تنتهي فعلًا. الرسالة تقول «أربعة عشر يومًا»،
+         وبعدها ثلاثة أيام مهلة تفتح إشعارًا في اللوحة — وهو موعد
+         المتابعة نفسه: «انتهت تجربتك، أتكمل؟» */
+      auto_suspend: 1,
+      trial_expires_at: addDaysIso(input.trialDays),
+      notes: `نسخة تجريبية من أداة المبيعات — ${input.leadId}`,
+    }, actor);
+  }
+
+  /* إعادة إرسال البيانات: كلمةٌ جديدة تُولَّد وتُبطَل القديمة. الأداة لا
+     تحفظ كلمة مرور، فالإرسال الثاني إصدارٌ جديد لا استرجاع. */
+  if (path === '/api/partners/credentials') {
+    const tenantId = requiredText(body.tenant_id, 'معرّف العميل', 80);
+    const tenant = await env.DB.prepare(
+      "SELECT id, environment FROM tenants WHERE id = ? AND environment = 'demo'",
+    ).bind(tenantId).first<{ id: string }>();
+    /* الإنتاج خارج هذا الباب: أداة المبيعات لا تُبطل جلسات عميلٍ يدفع. */
+    if (!tenant) throw new HttpError(404, 'TENANT_NOT_FOUND', 'لا توجد نسخة تجريبية بهذا المعرّف.');
+    return resetOwnerPin(request, env, tenantId, ipHash);
+  }
+
+  throw new HttpError(404, 'NOT_FOUND', 'المسار غير موجود.');
+}
+
 async function api(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -1341,6 +1445,7 @@ async function api(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ ok: true, service: 'athar-console', version: '2.0.0' });
   }
   if (path === '/api/login' && request.method === 'POST') return login(request, env);
+  if (path.startsWith('/api/partners/')) return partnerApi(request, env, path);
 
   const session = await authenticate(request, env);
   if (path === '/api/session' && request.method === 'GET') {

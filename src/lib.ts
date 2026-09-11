@@ -149,3 +149,139 @@ export function addDaysIso(days: number): string {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+/**
+ * الإيقاف التلقائيّ عند انتهاء المدّة: يُطلب صراحةً، وإلا فلا.
+ *
+ * ✦ القاعدة مكتوبة هنا لا منثورةً في مسار الإنشاء، لأن طرفيها متعارضان
+ * ولا يُقرأ أحدهما إلا مع الآخر: تجربة أداة المبيعات **يجب** أن تتوقّف
+ * (وإلا صارت هديّةً دائمة ورسالتُها كاذبة)، ونسخُ العرض المصنوعة من
+ * شاشة اللوحة (`demo`، `sanabel`) **يجب** ألّا تتوقّف — أوّل رابطٍ
+ * يُرسَل يفتح على «غير متاح».
+ *
+ * فالافتراض «لا يتوقّف»، والطلب الصريح وحده يقلبه.
+ */
+export const wantsAutoSuspend = (value: unknown): 0 | 1 =>
+  (value === 1 || value === true ? 1 : 0);
+
+/* ==================== أرقام الجوّال الفلسطينية ==================== */
+
+/**
+ * رقم واتساب صالح من أيّ شكلٍ يُكتب به الرقم عندنا.
+ *
+ * ✦ كانت اللوحة تبني الرابط بـ`phone.replace(/\D/g,'')` ولا شيء غيره.
+ * وبيانات الإنتاج الحقيقية تحوي أربعة أشكال، ثلاثة منها تُنتج رابطًا
+ * معطوبًا:
+ *
+ *   0597862389                          → wa.me/0597862389        بلا مقدّمة
+ *   ‏+972 56-666-0005‏                   → wa.me/972566660005      مقدّمة خطأ
+ *   0599901300 | 0599307303 | 05979...  → ثلاثة أرقام ملتصقة في واحد
+ *   ⁦+970 599 526 100⁩                   → صحيح — وهو الشكل الوحيد الذي كان يعمل
+ *
+ * وفي البيانات علاماتُ اتجاهٍ خفيّة (U+200F و U+2066 و U+2069) تأتي مع
+ * النسخ من جهات اتصال أندرويد وواتساب. لا تُرى ولا تُطبع، وتكسر أيّ
+ * مقارنةٍ أو تحقّقٍ مربوطٍ بأوّل النصّ أو آخره.
+ *
+ * **و972 ليست خطأً دائمًا.** الرقم الفلسطينيّ (059 جوّال · 056 أوريدو)
+ * يُكتب أحيانًا بالمقدّمة القديمة، فيُصحَّح إلى 970. أمّا 050 و052 و054
+ * وأخواتها فمشغّلون إسرائيليّون فعلًا، وتحويلها إلى 970 يعطي رقمًا لا
+ * وجود له.
+ */
+
+const ARABIC_DIGITS = /[٠-٩۰-۹]/g;
+
+/* الفواصل المستعملة فعلًا في القاعدة. والشرطة ليست منها: تقع داخل
+   الرقم نفسه (56-666-0005) لا بينه وبين غيره. */
+const PHONE_SEPARATORS = /[\/|,،;؛\n\r]+|\s+-\s+|\s+و\s+|\s+أو\s+|\s+ext\.?\s*/gi;
+
+export type PhoneKind =
+  'jawwal' | 'ooredoo' | 'israeli' | 'landline' | 'unknown' | 'none';
+
+export type PhoneRead = {
+  /** رقم واتساب كاملًا بلا `+`، أو "" إن لم يصلح. */
+  number: string;
+  mobile: boolean;
+  kind: PhoneKind;
+  /** كم رقمًا وُجد في الحقل — لتقول للمستخدم «اختير أوّل جوّال من ثلاثة». */
+  count: number;
+  /** كل الأرقام الصالحة للواتساب في الحقل، بالترتيب. */
+  all: string[];
+};
+
+/** يحوّل الأرقام العربية-الهندية ويُسقط كل ما ليس رقمًا. */
+const onlyDigits = (value: string): string => value
+  .replace(ARABIC_DIGITS, (d) => String(d.charCodeAt(0) & 0x0f))
+  .replace(/\D/g, '');
+
+/**
+ * الرقم الوطنيّ: تسع خانات للجوّال، وثمان للأرضيّ.
+ *
+ * والمقدّمة المكتوبة تُسقَط ولا تُحفظ، لأنها لا تدخل القرار: 059 جوّالٌ
+ * فلسطينيّ سواءٌ كُتب بـ970 أو 972 أو بلا مقدّمة.
+ */
+function nationalNumber(digits: string): string {
+  let rest = digits;
+  if (rest.startsWith('00')) rest = rest.slice(2);
+  if (rest.startsWith('970') || rest.startsWith('972')) return rest.slice(3);
+  if (rest.startsWith('0')) return rest.slice(1);
+  return rest;
+}
+
+function classify(nsn: string): PhoneKind {
+  if (/^59\d{7}$/.test(nsn)) return 'jawwal';
+  if (/^56\d{7}$/.test(nsn)) return 'ooredoo';
+  if (/^5[0234578]\d{7}$/.test(nsn)) return 'israeli';
+  if (/^[2489]\d{7}$/.test(nsn)) return 'landline';
+  return 'unknown';
+}
+
+const RANK: Record<PhoneKind, number> = {
+  jawwal: 0, ooredoo: 0, israeli: 1, landline: 2, unknown: 3, none: 4,
+};
+
+export function readPhone(raw: unknown): PhoneRead {
+  const parts = String(raw ?? '')
+    .split(PHONE_SEPARATORS)
+    .map(onlyDigits)
+    .filter(Boolean);
+
+  if (!parts.length) return { number: '', mobile: false, kind: 'none', count: 0, all: [] };
+
+  let best: { kind: PhoneKind; nsn: string } | null = null;
+  const all: string[] = [];
+
+  for (const part of parts) {
+    const nsn = nationalNumber(part);
+    const kind = classify(nsn);
+    if (!best || RANK[kind] < RANK[best.kind]) best = { kind, nsn };
+    /* ✦ كل الأرقام الصالحة لا الأوّل وحده.
+       حقلُ «مطعم سنابل» فيه ثلاثة، والأداة كانت تعرض الأوّل وتُخفي
+       الآخرين — فحين لم يكن على الأوّل واتساب بدا العميل غير قابلٍ
+       للوصول، وهو قابل. */
+    if (kind === 'jawwal' || kind === 'ooredoo') all.push(`970${nsn}`);
+    else if (kind === 'israeli') all.push(`972${nsn}`);
+  }
+
+  const { kind, nsn } = best!;
+
+  /* الفلسطينيّ إلى 970 مهما كُتب، والإسرائيليّ يبقى 972. وما عداهما لا
+     يُخترع له رقم: الأرضيّ لا يعمل على واتساب، والناقص ناقص. */
+  const country = kind === 'jawwal' || kind === 'ooredoo' ? '970'
+    : kind === 'israeli' ? '972'
+      : '';
+
+  return {
+    number: country ? country + nsn : '',
+    mobile: Boolean(country),
+    kind,
+    count: parts.length,
+    all,
+  };
+}
+
+/** رابط واتساب جاهز، أو "" إن لم يصلح الرقم. */
+export function whatsappUrl(raw: unknown, text = ''): string {
+  const { number } = readPhone(raw);
+  if (!number) return '';
+  return `https://wa.me/${number}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+}

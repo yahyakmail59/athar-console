@@ -1,3 +1,5 @@
+import { whatsappUrl } from '/phone.js';
+
 const state = {
   csrf: '',
   dashboard: null,
@@ -924,7 +926,7 @@ function leadCard(lead) {
     actions.append(element('a', {
       className: 'button button-primary',
       text: 'ردّ عبر واتساب',
-      href: `https://wa.me/${lead.phone.replace(/\D/g, '')}`,
+      href: whatsappUrl(lead.phone),
       target: '_blank', rel: 'noopener',
     }));
   }
@@ -1048,7 +1050,7 @@ function renderReports() {
         element('td', { text: money(row.amount_minor, row.currency) }),
         element('td', {}, row.phone
           ? element('a', { className: 'text-button', text: 'واتساب', target: '_blank', rel: 'noopener',
-              href: `https://wa.me/${row.phone.replace(/\D/g, '')}` })
+              href: whatsappUrl(row.phone) })
           : element('span', { className: 'muted', text: '—' })),
       ]))
     : [element('tr', {}, [element('td', { text: 'لا متأخرين — كل الاشتراكات في موعدها', attrs: { colspan: '6' } })])]));

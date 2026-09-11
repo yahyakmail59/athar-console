@@ -15,6 +15,8 @@
  * إلا حيث اختير ذلك صراحةً.
  */
 
+import { whatsappUrl } from './lib';
+
 /**
  * إيقاف المستأجر في محرك منتجه.
  *
@@ -185,15 +187,14 @@ export async function pendingNotices(env: Env) {
      LIMIT 100`,
   ).all<Record<string, unknown>>();
 
-  return rows.results.map((row) => {
-    const digits = String(row.phone || '').replace(/\D/g, '');
-    return {
-      ...row,
-      whatsapp_url: digits
-        ? `https://wa.me/${digits}?text=${encodeURIComponent(String(row.message))}`
-        : '',
-    };
-  });
+  /* ✦ الرقم يُقرأ لا يُجرَّد.
+     تجريدُ غير الأرقام وحده يُنتج `wa.me/0597862389` — بلا مقدّمة وبصفرٍ
+     بادئ — وهو أكثر شكلٍ في القاعدة. ويُنتج من حقلٍ فيه ثلاثة أرقام
+     رقمًا واحدًا ملتصقًا من ثلاثين خانة. */
+  return rows.results.map((row) => ({
+    ...row,
+    whatsapp_url: whatsappUrl(row.phone, String(row.message)),
+  }));
 }
 
 export const markNoticeDelivered = (env: Env, id: string) => env.DB.prepare(

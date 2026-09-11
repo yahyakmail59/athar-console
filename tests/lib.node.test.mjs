@@ -8,6 +8,7 @@ import {
   normalizeSlug,
   optionalText,
   requiredText,
+  wantsAutoSuspend,
 } from '../.test-build/src/lib.js';
 import { createHash, createHmac } from 'node:crypto';
 import { signedAdapterHeaders } from '../.test-build/src/adapter.js';
@@ -156,4 +157,19 @@ test('every adapter call with a body carries a matching request_id', async () =>
       `an inline adapter body is missing request_id: ${call.slice(0, 200)}`,
     );
   }
+});
+
+test('الإيقاف التلقائيّ يُطلب صراحةً وإلا فلا', () => {
+  // تجربة أداة المبيعات تطلبه، فتتوقّف بعد مدّتها.
+  assert.equal(wantsAutoSuspend(1), 1);
+  assert.equal(wantsAutoSuspend(true), 1);
+
+  // ونسخ العرض المصنوعة من شاشة اللوحة لا تطلبه، فتبقى تعمل.
+  assert.equal(wantsAutoSuspend(undefined), 0);
+  assert.equal(wantsAutoSuspend(0), 0);
+  assert.equal(wantsAutoSuspend(false), 0);
+
+  // ونصٌّ ليس طلبًا: جسمٌ يصل من نموذج HTML يحمل '1' لا 1.
+  assert.equal(wantsAutoSuspend('1'), 0);
+  assert.equal(wantsAutoSuspend('yes'), 0);
 });

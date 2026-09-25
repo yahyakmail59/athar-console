@@ -1,5 +1,5 @@
 /**
- * نسخ احتياطي مجدول لقواعد D1 الأربع إلى R2.
+ * نسخ احتياطي مجدول لقواعد D1 السبع إلى R2.
  *
  * لماذا هذا موجود: المطاعم كلها في قاعدة واحدة، وكذلك المدارس والصيدليات.
  * ترحيل خاطئ واحد يضرب كل المستأجرين معًا، ولم تكن هناك نسخة يُرجَع إليها
@@ -141,6 +141,9 @@ export function backupTargets(env: Env): BackupTarget[] {
     ['restaurant-db', (env as unknown as Record<string, D1Database>).BACKUP_RESTAURANT],
     ['school-db', (env as unknown as Record<string, D1Database>).BACKUP_SCHOOL],
     ['pharma-db', (env as unknown as Record<string, D1Database>).BACKUP_PHARMA],
+    ['clinic-db', (env as unknown as Record<string, D1Database>).BACKUP_CLINIC],
+    ['athar-crm-db', (env as unknown as Record<string, D1Database>).BACKUP_CRM],
+    ['athar-site-db', (env as unknown as Record<string, D1Database>).BACKUP_SITE],
   ];
   return all.filter((entry): entry is [string, D1Database] => Boolean(entry[1]))
     .map(([name, db]) => ({ name, db }));

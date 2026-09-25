@@ -9,9 +9,9 @@ import {
   optionalText,
   requiredText,
   wantsAutoSuspend,
-} from '../.test-build/src/lib.js';
+} from '../src/lib.ts';
 import { createHash, createHmac } from 'node:crypto';
-import { signedAdapterHeaders } from '../.test-build/src/adapter.js';
+import { signedAdapterHeaders } from '../src/adapter.ts';
 
 test('tenant slug is normalized and validated', () => {
   assert.equal(normalizeSlug('  Al-Amal-01  '), 'al-amal-01');

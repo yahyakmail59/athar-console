@@ -54,6 +54,23 @@
       "binding": "BACKUP_PHARMA",
       "database_name": "pharma-db",
       "database_id": "bff19fd4-5831-4848-a4f5-1bc3ac281001"
+    },
+    // ✦ الثلاث التي كانت خارج النسخ: سجلّات المرضى، وخط المبيعات كله،
+    // ومحتوى athar.date. لم يكن يحميها غير Time Travel في D1.
+    {
+      "binding": "BACKUP_CLINIC",
+      "database_name": "clinic-db",
+      "database_id": "30370781-1acc-43ea-a5b7-a9f9d86e32dc"
+    },
+    {
+      "binding": "BACKUP_CRM",
+      "database_name": "athar-crm-db",
+      "database_id": "44adfcf0-d18a-4783-ae2f-79efb86e0f78"
+    },
+    {
+      "binding": "BACKUP_SITE",
+      "database_name": "athar-site-db",
+      "database_id": "2724c1d3-94bf-4bb3-b475-f0ec7affcf88"
     }
   ],
 
